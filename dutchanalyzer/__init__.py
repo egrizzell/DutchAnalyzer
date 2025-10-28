@@ -1,1 +1,0 @@
-from dutchanalyzer import config  
