@@ -4,12 +4,43 @@ DutchAnalyzers goal is to create a set of replacement rules and make easily avai
 DutchAnalyzer 2.0 is meant to be the public version of DutchAnalyzer using exclusively free to use, open source datasets. It is licensed under Creative Commons Attribution–NonCommercial–ShareAlike 4.0 International (CC BY-NC-SA 4.0). 
 
 ## Project Structure 
-- data\
-    - external\
-        - raw\
-            - kaikki\
-                
-        - preprocessed\ 
+├── README.md
+├── LICENSE.md
+├── pyproject.toml 
+├── requirements.txt
+├── data
+│   └── external 
+|       ├── opentaal
+|       ├── leipzig   
+│   └── interim
+│       ├── preproccessing
+│       ├── exploration
+│       ├── cleaning
+│       └── analysis
+│   ├── processed 
+│   └── raw         
+|       └── kaikki
+|            ├── en
+|            └── nl
+├── models 
+├── notebooks 
+│       ├── preproccessing
+
+├── references
+|
+├── reports
+|
+└── dutchanalyzer
+    │
+    ├── __init__.py             
+    │
+    ├── config.py               
+    │
+    ├── dataset.py              
+    │
+    ├── features.py 
+    │                
+    └── utilities.py
 
 
 ## Licensing
@@ -35,5 +66,5 @@ The following sources are what currently are expected to be used over the course
 
 You may freely use and adapt this project for non-commercial research and educational purposes, provided you give attribution and share any derivatives under the same license.
 
-
-
+## Contributing
+If you are interested in contributing please send me a message on github 

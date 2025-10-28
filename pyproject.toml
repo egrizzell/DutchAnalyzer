@@ -16,7 +16,10 @@ requires-python = ">=3.8"
 dependencies = [
   "requests",
   "pandas",
-  "tqdm"
+  "tqdm",
+  "ipython",
+  "json",
+  "numpy"
 ]
 
 [project.urls]
