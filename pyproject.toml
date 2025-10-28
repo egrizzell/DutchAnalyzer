@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dutch-analyzer"
+version = "2.0.0"
+description = "Tools for creating and analyzing morphological rules between the Dutch and English languages."
+authors = [
+  { name = "Elise Grizzell"}
+]
+license = { text = "CC BY-NC-SA 4.0" }
+readme = "README.md"
+requires-python = ">=3.8"
+
+dependencies = [
+  "requests",
+  "pandas",
+  "tqdm"
+]
+
+[project.urls]
+Homepage = "https://github.com/egrizzell/DutchAnalyzer"
+Source = "https://github.com/egrizzell/DutchAnalyzer"
