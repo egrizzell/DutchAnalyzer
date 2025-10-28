@@ -9,7 +9,9 @@ description = "Tools for creating and analyzing morphological rules between the 
 authors = [
   { name = "Elise Grizzell"}
 ]
-license = { text = "CC BY-NC-SA 4.0" }
+[project.license]
+text = "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)"
+
 readme = "README.md"
 requires-python = ">=3.8"
 
@@ -19,9 +21,18 @@ dependencies = [
   "tqdm",
   "ipython",
   "json",
-  "numpy"
+  "numpy",
+  "loguru",
+  "typer",
+  "python-dotenv",
+  "jupyter",
+]
+
+packages = [
+  { include = "dutchanalyzer", from = "src" }
 ]
 
 [project.urls]
 Homepage = "https://github.com/egrizzell/DutchAnalyzer"
 Source = "https://github.com/egrizzell/DutchAnalyzer"
+

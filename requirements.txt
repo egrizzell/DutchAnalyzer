@@ -1,0 +1,10 @@
+# Requirements
+requests
+pandas
+tqdm
+jupyter
+json
+numpy
+loguru
+typer
+python-dotenv
