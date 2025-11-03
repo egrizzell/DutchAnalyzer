@@ -78,7 +78,7 @@ def safe_eval(x):
 def return_non_na(df, col):
     return df[~df[col].isna()]
 
-def make_raw_pages_df(file_path, save_path='', save_file_type='NA', save_increment=-1, lang_prefix='en', start=0, lang_codes=['en', 'nl', 'mul'], total_lines=-1):
+def make_raw_pages_df(file_path, save_path='', save_file_type='NA', save_increment=-1, lang_prefix='en', start=0, lang_codes=['en', 'nl'], total_lines=-1):
     count = 0
     df_list = []
     batch_list = []
@@ -97,7 +97,10 @@ def make_raw_pages_df(file_path, save_path='', save_file_type='NA', save_increme
                 try:
                     loaded_line = json.loads(line)
                     loaded_line = safe_eval(loaded_line)
-                    batch_list.append(loaded_line)
+                    lang_code = loaded_line.get('lang_code', None)
+                    if lang_code:
+                        if lang_code in lang_codes:
+                            batch_list.append(loaded_line)
                 except json.JSONDecodeError:
                     error_list.append(line)
                     continue  # skip malformed lines
