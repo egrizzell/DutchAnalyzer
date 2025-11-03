@@ -20,6 +20,24 @@ def main(sources):
 
 
 if __name__ == "__main__":
-    sources = {'kaikki': {'Dutch': {'post_processed': ''}}}
+    sources = {'kaikki': 
+                    {'Dutch_uncompressed': 
+                        {   'post_processed': 'https://kaikki.org/dictionary/Dutch/kaikki.org-dictionary-Dutch.jsonl',
+                            'raw': 'https://kaikki.org/dictionary/downloads/nl/nl-extract.jsonl',
+                            'error_file': 'https://kaikki.org/dictionary/downloads/nl/nl-extract.errors',
+                            'log': 'https://kaikki.org/dictionary/downloads/nl/nl-extract.log'
+                        },
+
+                    'English_uncompressed':
+                        {   'post_processed': 'https://kaikki.org/dictionary/English/kaikki.org-dictionary-English.jsonl',
+                            'raw': 'https://kaikki.org/dictionary/raw-wiktextract-data.jsonl',
+                            'error_file': 'https://kaikki.org/dictionary/wiktextract-error-data.json',
+                            'lua': 'https://kaikki.org/dictionary/wiktionary-modules.tar',
+                            'templates': 'https://kaikki.org/dictionary/wiktionary-templates.tar',
+                        },
+                            
+                        
+                    }
+                }
     app()
     

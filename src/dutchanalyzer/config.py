@@ -6,14 +6,11 @@ import os
 
 # Load environment variables from .env file if it exists
 load_dotenv()
-
-# Load environment variables from .env file if it exists
-load_dotenv()
 # Get the path to the first data source from environment variables
 # This should be set in the .env file or the environment
 
 # Paths
-PROJ_ROOT = Path(__file__).resolve().parents[1]
+PROJ_ROOT = Path(__file__).resolve().parents[2]
 #logger.info(f"PROJ_ROOT path is: {PROJ_ROOT}")
 
 DATA_DIR = PROJ_ROOT / "data"
@@ -21,7 +18,8 @@ RAW_DATA_DIR = DATA_DIR / "raw"
 INTERIM_DATA_DIR = DATA_DIR / "interim"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 EXTERNAL_DATA_DIR = DATA_DIR / "external"
-
+RAW_KAIKKI_DIR = RAW_DATA_DIR / 'kaikki'
+KAIKKI_EN_POSTPROCESSED_JSON = RAW_KAIKKI_DIR / 'en' / 'kaikki_en-postprocessed.jsonl'
 
 try:
     from tqdm import tqdm

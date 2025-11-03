@@ -5,3 +5,4 @@ notebooks/archive/
 *.egg-info/
 *.egg
 PROJECT_PLAN.md
+src/dutch_analyzer.egg-info
