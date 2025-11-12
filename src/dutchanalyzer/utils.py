@@ -10,7 +10,12 @@ import json
 from pathlib import Path
 import datetime
 
-
+def safe_dict(obj_str: str):
+    if isinstance(obj_str, str):
+        try:
+            return ast.literal_eval(obj_str)
+        except Exception:
+            return ""       # fallback
 
 def check_none(value):
     isna = False
