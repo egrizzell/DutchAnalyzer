@@ -61,7 +61,7 @@ def get_longest_line(file_path, chunk_size=1024 * 1024):
             
     return lines, longest_lines
                 
-def check_has_valid_chars(text):
+def check_has_valid_chars(text, num_to_check=2):
     allowed_letters = "a-zA-ZáéíóúÁÉÍÓÚèàòùÈÀÒÙëïöüËÏÖÜ"
     # punctuation (we escape it safely)
     allowed_punct = re.escape("'- .,;:")
@@ -69,9 +69,9 @@ def check_has_valid_chars(text):
     allowed_chars = allowed_letters + allowed_punct + "-"
     try: 
         text = str(text).strip()
-        first_two = text[:2]  # take first one or two characters
+        first_chars = text[:num_to_check]  # take first one or two characters
         # check each character individually
-        for ch in first_two:
+        for ch in first_chars:
             if not re.match(f"[{allowed_chars}]", ch):
                 return False
         return True

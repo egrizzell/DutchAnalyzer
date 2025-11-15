@@ -26,6 +26,7 @@ ENR_DIR = WIKT_PREPROCESSING_DIR / 'en' / 'ENR'
 NER_DIR =  WIKT_PREPROCESSING_DIR / 'nl' / 'NER'
 NNR_DIR =  WIKT_PREPROCESSING_DIR / 'nl' / 'NNR'
 
+WIKT_CLEANING_DIR = INTERIM_DATA_DIR / 'cleaning' / 'wikt'
 try:
     from tqdm import tqdm
 
