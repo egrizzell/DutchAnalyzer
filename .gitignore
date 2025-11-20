@@ -2,7 +2,9 @@
 venv/
 data/
 notebooks/archive/
+notebooks/excluded/
 *.egg-info/
 *.egg
 PROJECT_PLAN.md
 src/dutch_analyzer.egg-info
+

@@ -27,7 +27,7 @@ The goal is to provide **ready-to-use frequency lists, morphological rules**, an
 |-----------|-------------|-----------------|
 | **M1** | Setup project structure, directories, and dependencies. Download data (Kaikki.org, OpenTaal, Leipzig).
 | **M2** | Transfer and refactor utilities and helper functions from private code database|
-| **M3** | preprocess Kaikki.org datasets. Normalize senses and top level word tables. Combine into a unified dictionary. |
+| **M3** | preprocess Kaikki.org datasets. Normalize senses and top level word dictionaries. Combine into a unified dictionary. |
 | **M4** | Extract morphological rules from Dutch and English data | 
 | **M5** | Generate frequency lists and derived data | 
 | **M6** | Create setup scripts (`setup_project.py`) and documentation | 
