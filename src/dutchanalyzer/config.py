@@ -21,12 +21,15 @@ EXTERNAL_DATA_DIR = DATA_DIR / "external"
 RAW_KAIKKI_DIR = RAW_DATA_DIR / 'kaikki'
 KAIKKI_EN_POSTPROCESSED_JSON = RAW_KAIKKI_DIR / 'en' / 'kaikki_en-postprocessed.jsonl'
 WIKT_PREPROCESSING_DIR = INTERIM_DATA_DIR / 'preprocessing' / 'wikt'
+WIKT_ANALYSIS_DIR = INTERIM_DATA_DIR / 'analysis'/ 'wikt' 
+
 EER_DIR = WIKT_PREPROCESSING_DIR / 'en' / 'EER'
 ENR_DIR = WIKT_PREPROCESSING_DIR / 'en' / 'ENR'
 NER_DIR =  WIKT_PREPROCESSING_DIR / 'nl' / 'NER'
 NNR_DIR =  WIKT_PREPROCESSING_DIR / 'nl' / 'NNR'
 
 WIKT_CLEANING_DIR = INTERIM_DATA_DIR / 'cleaning' / 'wikt'
+UTILITIES_DIR = PROJ_ROOT / 'src' / 'dutchanalyzer' / 'utilities'
 try:
     from tqdm import tqdm
 

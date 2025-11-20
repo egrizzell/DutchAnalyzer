@@ -1,3 +1,4 @@
+from html.entities import name2codepoint
 import os
 from tqdm import tqdm
 import re
@@ -9,6 +10,7 @@ import numpy as np
 import json
 from pathlib import Path
 import datetime
+from dutchanalyzer.config import *
 
 def safe_dict(obj_str: str):
     if isinstance(obj_str, str):
@@ -59,8 +61,252 @@ def safe_eval(x):
             return []        # fallback
     return x
 
-# def return_non_na(df, col):
-#     return df[~df[col].isna()]
+def get_previous_save_folder(previous_dir_parent_folder=INTERIM_DATA_DIR, most_recent=True, days_ago=-1) -> Path:
+    if type(previous_dir_parent_folder) == str or type(previous_dir_parent_folder) == os.path:
+        previous_dir_parent_folder = Path(str(previous_dir_parent_folder))
+        print('Converting to Path')
+
+    previous_path = previous_dir_parent_folder
+
+    if days_ago != -1:
+        days_ago_date = datetime.date.today() - datetime.timedelta(days=days_ago)
+        days_ago_date_str = days_ago_date.__format__("%d-%m-%y")
+        previous_path = Path(previous_dir_parent_folder, days_ago_date_str)
+       
+    
+    max_mtime = 0
+    for dirname,subdirs,files in Path.walk(previous_path):
+        for fname in files:
+            full_path = dirname / fname
+            mtime = Path(full_path).stat().st_mtime
+            if mtime > max_mtime:
+                max_mtime = mtime
+                max_dir = dirname
+                
+
+                max_file = fname
+    if max_mtime == 0:
+        print('No files in directory')
+    else:
+        if max_dir.parts[-1][2] != '-':
+            parts = Path(max_dir).parts
+            curr_path = Path(parts[0])
+            for i, p in enumerate(parts):
+                curr_path = Path(curr_path, p)
+                if len(p)> 5:
+                    if p[2] == '-' and p[5] == '-':
+                        max_dir = curr_path
+                        break
+                    
+        previous_path = max_dir
+    if not previous_path.exists():
+        print("Does Not Exist")
+        return previous_dir_parent_folder
+    return previous_path
+        
+            
+def get_last_version(file_name, search_dir=DATA_DIR, partial_match=False):
+    pattern = file_name
+    if partial_match:
+        filename_parts = file_name.split('.')
+        pattern = f'*{filename_parts[0]}*.{filename_parts[1]}'
+    files = Path(search_dir).rglob(pattern)
+    if not files:
+        print('Not Found')
+        return ''
+    if files:
+        max_mtime = 0
+        for f in files:
+            mtime = f.stat().st_mtime
+            if mtime > max_mtime:
+                max_mtime = mtime
+                max_file = f
+        return max_file
+
+
+
+
+def what_is(term):
+    lookup_dict= {
+        'acronym': 'Like abbrivation',
+        'adj': 'adjective', 
+    }
+    print("not yet implemented")
+
+def get_wiktionary_abbreviations(abbr):
+    wiktionary_abbreviations = {
+        # =========================
+        # Parts of Speech
+        # =========================
+        "n": "noun",
+        "v": "verb",
+        "adj": "adjective",
+        "adv": "adverb",
+        "prep": "preposition",
+        "pron": "pronoun",
+        "conj": "conjunction",
+        "det": "determiner",
+        "num": "numeral",
+        "interj": "interjection",
+        "part": "particle",
+        "postp": "postposition",
+        "prep": "preposition",
+        "art": "article",
+
+        # Verb-specific
+        "v.t": "transitive verb",
+        "v.i": "intransitive verb",
+        "aux": "auxiliary verb",
+        "cop": "copular verb",
+
+        # Noun-specific
+        "propn": "proper noun",
+        "np": "proper noun",
+        "cn": "countable noun",
+        "uncn": "uncountable noun",
+
+        # =========================
+        # Grammar
+        # =========================
+        "sg": "singular",
+        "pl": "plural",
+        "du": "dual",
+        "f": "feminine",
+        "m": "masculine",
+        "ntr": "neuter",
+        "impf": "imperfective",
+        "pf": "perfective",
+        "prs": "present tense",
+        "past": "past tense",
+        "fut": "future tense",
+        "inf": "infinitive",
+        "pp": "past participle",
+        "ptcp": "participle",
+        "ger": "gerund",
+        "imper": "imperative",
+
+        # =========================
+        # Etymology
+        # =========================
+        "ult": "ultimately from",
+        "lt": "from (directly)",
+        "cf": "compare",
+        "cog": "cognate",
+        "attested": "attested",
+        "unattested": "unattested",
+        "der": "derived from",
+        "bor": "borrowed from",
+        "inh": "inherited from",
+        "dblt": "doublet of",
+        "cf.": "compare",
+        "prob": "probably",
+        "poss": "possibly",
+        "maybe": "uncertain origin",
+
+        # =========================
+        # Usage Labels
+        # =========================
+        "colloq": "colloquial",
+        "informal": "informal",
+        "slang": "slang",
+        "vulgar": "vulgar",
+        "offensive": "offensive",
+        "archaic": "archaic",
+        "obs": "obsolete",
+        "historical": "historical term",
+        "dialectal": "dialectal",
+        "regional": "regional",
+        "lit": "literary",
+        "rare": "rare",
+        "dated": "dated usage",
+        "nonstandard": "nonstandard",
+        "figurative": "figurative meaning",
+        "idiomatic": "idiomatic expression",
+
+        # =========================
+        # Geographic / Dialectal
+        # =========================
+        "US": "United States",
+        "UK": "United Kingdom",
+        "AU": "Australia",
+        "NZ": "New Zealand",
+        "CA": "Canada",
+        "Ireland": "Ireland",
+        "Scotland": "Scotland",
+        "England": "England",
+        "Wales": "Wales",
+
+        # Germanic dialect markers
+        "LG": "Low German",
+        "MHG": "Middle High German",
+        "OHG": "Old High German",
+
+        # English varieties
+        "AE": "American English",
+        "BE": "British English",
+
+        # Dutch varieties
+        "NL": "Netherlands",
+        "BE-nl": "Belgian Dutch (Flemish)",
+
+        # =========================
+        # Pronunciation
+        # =========================
+        "IPA": "International Phonetic Alphabet transcription",
+        "rhymes": "rhyme pattern",
+        "homophone": "word with same pronunciation",
+        "syncope": "sound omission",
+        "hiatus": "adjacent vowel separation",
+
+        # =========================
+        # Lexicographic Markers
+        # =========================
+        "syn": "synonym",
+        "ant": "antonym",
+        "hyponym": "specific term",
+        "hypernym": "broader term",
+        "holonym": "whole of which this is a part",
+        "meronym": "part of a whole",
+        "coord": "coordinate term",
+        "variant": "variant spelling",
+        "alt": "alternative form",
+        "abbr": "abbreviation",
+        "init": "initialism",
+        "acronym": "acronym",
+        "clipping": "shortened form",
+
+        # =========================
+        # Disciplines
+        # =========================
+        "ling": "linguistics",
+        "gram": "grammar",
+        "math": "mathematics",
+        "phys": "physics",
+        "bot": "botany",
+        "zool": "zoology",
+        "chem": "chemistry",
+        "med": "medicine",
+        "pharm": "pharmacology",
+        "astr": "astronomy",
+        "geol": "geology",
+
+        # =========================
+        # Template markup abbreviations (Wiktionary internal)
+        # =========================
+        "def": "definition line",
+        "pos": "part of speech line",
+        "etyl": "etymology template",
+        "t": "translation template",
+        "tt": "translation with transliteration",
+        "tr": "transliteration",
+        "gloss": "gloss (short meaning)",
+        "qual": "qualifier",
+        "lbl": "label template",
+        "ux": "usage example",
+        "uxi": "usage example with translation",
+    }
+
+    return wiktionary_abbreviations.get(abbr)
 
 # def make_raw_pages_df(file_path, save_path='', save_file_type='NA', save_increment=-1, lang_prefix='en', start=0, lang_codes=['en', 'nl'], total_lines=-1):
 #     count = 0
