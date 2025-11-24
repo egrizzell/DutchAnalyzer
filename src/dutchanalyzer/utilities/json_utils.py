@@ -11,6 +11,7 @@ import numpy as np
 import ujson
 from pathlib import Path
 import datetime
+import json
 
 
 def count_lines_with_progress(file_path, chunk_size=1024 * 1024):
@@ -284,9 +285,7 @@ def standardize_translation(obj: dict, lang_codes_to_keep=[], keep_no_lang=False
     standard_lang = lookup_lang_from_code(lang_code)
     if not standard_lang:
         return None    
-    pos = obj.get('pos', '')
     new_translation = {'word': word,
-                        'pos': pos,
                         'lang_code': lang_code,
                         'lang': lang,
                         'standard_lang': standard_lang}
@@ -295,10 +294,7 @@ def standardize_translation(obj: dict, lang_codes_to_keep=[], keep_no_lang=False
     for key, val in obj_items:
         if key not in new_translation:
             new_translation[key] = val
-    print(new_translation)
     return new_translation
-
-
 
 def sort_dict(obj, exclude=[], prepend=[]):
     new_obj = {}
@@ -329,8 +325,9 @@ def sort_translations(translations: list, sort_by='lang_code') -> list:
     sorted_translations = sorted(translations, key=lambda translations: translations[sort_by])
     return sorted_translations
     
-def filter_categories(obj: list, lang_code=''):
+def filter_categories(obj: list):
     new_categories = []
+
     if not obj or not isinstance(obj, list):
         return None
     
@@ -340,16 +337,43 @@ def filter_categories(obj: list, lang_code=''):
             if category.startswith('Terms with') and category.endswith('translations') and 'incorrect' not in category:
                 cut_cat = category.removeprefix('Terms with')
                 cut_cat = cut_cat.removesuffix('translations')
-                standard_lang = lookup_lang_code(cut_cat)
-                if standard_lang:
+                cut_cat = cut_cat.strip()
+                lang_code2 = lookup_lang_code(cut_cat)
+                if lang_code2:
                     new_categories.append(category)
-              
+            elif category.startswith('Requests for'):
+                cut_cat = category.removeprefix('Requests for review of ')
+                cut_cat = category.removeprefix('Requests for attention concerning ')
+                cut_cat = category.removeprefix('Requests for translations into ')
+
+                cut_cat = category.removesuffix(' translations')
+                cut_cat = category.removesuffix(' entries')
+
+                cut_cat = cut_cat.strip()
+                lang_code2 = lookup_lang_code(cut_cat)
+                if lang_code2:
+                    new_categories.append(category)
+                
+
             elif category.startswith('Woorden in het'):
-                cut_cat = category.removeprefix('Woorden in het')
-                standard_lang = lookup_lang_code(cut_cat)
-                if standard_lang:
-                    new_categories.append(category)
+                cut_cat = category.removeprefix('Woorden in het ')
+                lang_code2 = lookup_lang_code(cut_cat.strip())
+                if lang_code2:
+                    new_categories.append(category)  
             
+            elif 'transliterations' in category:
+                cut_cat = category.removeprefix('Automatic ')
+                cut_cat = cut_cat.removesuffix(' terms with redundant transliterations')
+                cut_cat = cut_cat.removesuffix(' terms with non-redundant manual transliterations')
+                cut_cat = cut_cat.removesuffix(' transliterations containing ambiguous characters')
+                lang_code2 = lookup_lang_code(cut_cat.strip())
+                if lang_code2:
+                    new_categories.append(category)
+            elif category.endswith('terms in nonstandard scripts'):
+                cut_cat = category.removesuffix(' terms in nonstandard scripts')
+                lang_code2 = lookup_lang_code(cut_cat.strip())
+                if lang_code2:
+                    new_categories.append(category)
             elif category.startswith("Woorden met") and 'referenties' in category:
                 continue
             elif "Woorden in het Nederlands met audioweergave" == category:
@@ -411,13 +435,14 @@ def sort_entry(obj, code=None, lang=None, standard_lang=None):
 
 
 def sort_filter_sense(obj: dict, pop_examples=True) -> dict:
-    new_sense = OrderedDict()
+    new_sense = {}
+  
     glosses = obj.pop('glosses', '')
     translations = obj.pop('translations', '')
     translations = sort_translations(translations)
     form_of = obj.pop('form_of', '')
     if not form_of:
-        form_of = obj.get('forms')
+        form_of = obj.get('forms', '')
     
     obj.pop('senseid', '')
     obj.pop('wikidata', '')
@@ -427,19 +452,22 @@ def sort_filter_sense(obj: dict, pop_examples=True) -> dict:
 
     if pop_examples:
         obj.pop('examples','')
-    if glosses:
-        if isinstance(glosses[0], list):
-            print('list', glosses)
     new_sense['glosses'] = glosses
-    new_sense['form_of'] = form_of
+    if form_of:
+        new_sense['form_of'] = form_of
     synonyms = obj.get('synonyms')
-    synonyms = sort_dict_list(synonyms, 'word', True)
-    new_sense['synonyms'] = synonyms
-    sorted_obj=sort_dict(obj, list(new_sense.keys()) + ['translations'])
-    for k,v in sorted_obj.items():
-        if k not in new_sense:
-            new_sense[k] = v
-    new_sense['translations'] = translations
+    if synonyms:
+        synonyms = sort_dict_list(synonyms, 'word', True)
+        new_sense['synonyms'] = synonyms
+    
+    
+    sorted_keys = sorted(list(obj.keys()))
+    for key in sorted_keys:
+        if key not in new_sense and key != 'translations':
+            new_sense[key] = obj[key]
+    if translations:
+        new_sense['translations'] = translations
+
     return new_sense
     
 
@@ -447,6 +475,8 @@ def sort_standardize_entry(obj: dict, pop_examples=True) -> dict:
     new_obj = {}
     word = obj.get('word')
     if not word:
+        return None
+    if has_cjk_or_arabic_fast(word):
         return None
     pos = obj.get('pos')
     if not pos:
@@ -486,28 +516,23 @@ def sort_standardize_entry(obj: dict, pop_examples=True) -> dict:
     new_obj['lang'] = lang
     new_obj['standard_lang'] = standard_lang
 
-    ## Filter Categories
-    categories = obj.get('categories')
-    if categories:
-        categories = filter_categories(categories)
+    try:
+        ## Filter Categories
+        categories = obj.get('categories')
         if categories:
-            new_obj['categories'] = sorted(categories)
-        else: new_obj['categories'] = []
-    else:
-        new_obj['categories'] = []
-
-    ## Filter Translations
-    new_translations = []
-    translations = obj.get('translations')
+            categories = filter_categories(categories)
+            if categories:
+                
+                new_obj['categories'] = sorted(categories)
+            
+            else: new_obj['categories'] = []
+        else:
+            new_obj['categories'] = []
+        
+    except:
+        print('categories failed ', categories)
+        raise
     
-    if translations:
-        for t in translations:
-            translation = standardize_translation(t)
-            if translation:
-                new_translations.append(translation)
-        if new_translations:
-            new_translations = sort_translations(new_translations)
-    new_obj['translations'] = new_translations
     
     ## Filter Senses
     new_senses = []
@@ -523,15 +548,165 @@ def sort_standardize_entry(obj: dict, pop_examples=True) -> dict:
             new_senses = []
     new_obj['senses'] = new_senses
 
+    if 'forms' in obj:
+        new_obj['forms'] = obj['forms']
+    ## Filter Etymologies
+    new_etymology_templates = []
+    if 'etymology_templates' in obj:
+        for ety_template in obj['etymology_templates']:
+            if 'args' in ety_template:
+                if '1' in ety_template['args']:
+                    lc = ety_template['args']['1']
+                    if lookup_lang_from_code(lc):
+                        new_etymology_templates.append(ety_template)
+            elif 'name' in ety_template:
+                name = ety_template['name']
+                name = name.split()
+                for n in name:
+                    if lookup_lang_from_code(n):
+                       new_etymology_templates.append(ety_template)          
+        if new_etymology_templates:
+            new_obj['etymology_templates'] = new_etymology_templates
+
+    ## Filter Sounds 
+    new_sounds = []
+    if 'sounds' in obj:
+        for sound in obj['sounds']:
+            sound.pop('ogg_url', '')
+            sound.pop('mp3_url', '')
+            sound.pop('audio', '')
+            if sound:
+                new_sounds.append(sound)
+    ## Add Remaining Keys
     obj_keys = sorted(list(obj.keys()))
     for key in obj_keys:
-        if key not in new_obj:
-            new_obj[key] = obj[key]
+        if key not in new_obj and key != 'translations':
+            if key == 'sounds' and new_sounds:
+                new_obj['sounds'] = new_sounds
+            else:
+                new_obj[key] = obj[key]
 
-    
+    ## Filter Translations
+    new_translations = []
+    translations = obj.get('translations')
+    try:
+        if translations:
+            for t in translations:
+                
+                translation = standardize_translation(t)
+                if translation:
+                    new_translations.append(translation)
+            if new_translations:
+
+                new_translations = sort_translations(new_translations)
+            
+            new_obj['translations'] = new_translations
+    except:
+        print('translations failed', new_translations)
+        raise
+
     if new_obj:
         return new_obj
     return None
+
+def extract_words_senses(raw_entry: dict):
+    word = raw_entry.get("word")
+    pos = raw_entry.get("pos", 'unknown')
+    senses = raw_entry.get("senses")
+    translations = raw_entry.get("translations")
+    lang_code = raw_entry.get("lang_code")
+    forms = raw_entry.get('forms')
+    synonyms = raw_entry.get('synonyms')
+    if not forms:
+        forms = raw_entry.get('form_of')
+    glosses = []
+    sense_translations = []
+    word_entry = {'word': word,
+                  'pos': pos, 
+                  'lang_code': lang_code}
+    if senses:
+        word_entry['senses'] = {}
+        for i, sense in enumerate(senses):
+            new_sense = {}
+            if 'glosses' in sense:
+                glosses = sense['glosses']
+                new_sense['glosses'] = glosses
+            if 'translations' in sense or 'translation' in sense:
+                sense_translations = sense['translations']
+                if not sense_translations:
+                    sense_translations = sense_translations['translation']
+                new_sense['translations'] = sense_translations
+            if 'form_of' in sense or 'forms' in sense:
+                forms = sense.get('form_of')
+                if not forms: forms = sense['forms']
+                new_sense['forms'] = forms
+            if 'alt_of' in sense:
+                new_sense['alt_of'] = sense.get('alt_of')
+            if 'synonyms' in sense:
+                new_sense['synonyms'] = sense.get('synonyms')
+            word_entry['senses'][i] = new_sense
+
+    if translations:
+        word_entry['translations'] = translations
+    if forms:
+        word_entry['forms'] = forms
+    if synonyms:
+        word_entry['synonyms'] = synonyms
+    if 'etymology_templates' in raw_entry:
+        word_entry['etymology_templates'] = raw_entry['etymology_templates']
+    if 'wl_code' in raw_entry:
+        word_entry['wl_code'] = raw_entry['wl_code']
+    return word_entry
+
+def process_obj(in_file, entries_out_file, wl_code, definitions_out_file=None, batch_size=1000, break_point=-1):
+    batch = []
+    entries_batch = []
+    error_lines = []
+    with open(in_file, 'r', encoding='utf-8') as f:
+        with open(entries_out_file, 'w+', encoding='utf-8') as out:
+            
+            for i, line in tqdm(enumerate(f)):
+                if break_point > 0:
+                    if i > break_point:
+                        print(entries_batch)
+                        break
+                if line:
+                    try:
+                        obj = json.loads(line)
+                        obj = sort_standardize_entry(obj)
+                        if obj:
+                            obj['wl_code'] = wl_code
+                            entries_batch.append(obj)
+
+                            if len(entries_batch) > batch_size:
+                                for entry in entries_batch:
+                                    json.dump(entry, out, ensure_ascii=False)
+                                    out.write('\n')
+                                entries_batch = []
+                            if definitions_out_file:
+                                word_entry = extract_words_senses(obj)
+                                batch.append(word_entry)
+                                if len(batch) > batch_size:
+                                    with open(definitions_out_file, 'a+', encoding='utf-8') as def_out: 
+                                        for entry in batch:
+                                            json.dump(entry, def_out, ensure_ascii=False)
+                                            def_out.write('\n')
+                                        batch = []
+                    except Exception as e:
+                        error_lines.append((i, obj))
+                        print(line)
+                        print("Error on line: ", i, " Error: ", e)
+                        break
+            if entries_batch:
+                for entry in entries_batch:
+                    json.dump(entry, out, ensure_ascii=False)
+                    out.write('\n')  
+            if batch and definitions_out_file:
+                with open(definitions_out_file, 'a+', encoding='utf-8') as def_out: 
+                    for entry in batch:
+                        json.dump(entry, def_out, ensure_ascii=False)
+                        def_out.write('\n')
+    return entries_batch, batch, error_lines
 
 def make_key_tuples(obj, out_set=set(), prev_level_tuple=()):
     if not obj:
@@ -551,3 +726,32 @@ def make_key_tuples(obj, out_set=set(), prev_level_tuple=()):
         for i, v in enumerate(obj):
             out_set = make_key_tuples(v, out_set, level_tuple)
     return out_set
+
+def reformat_sounds(obj: dict):
+    ipas = []
+    rhymes = []
+    other = []
+    tags = []
+
+    sounds = obj.get('sounds')
+    if sounds:
+        for sound in sounds:
+            ipa = sound.get('ipa')
+            rhyme = sound.get('rhymes')
+            tag = sound.get('tags')
+            if ipa:
+                if ipa not in ipas:
+                    ipas.append(ipa)
+            if rhyme:
+                if rhyme not in rhymes:
+                    rhymes.append(rhyme)
+            if tag:
+                if tag not in tags:
+                    tags.append(tag)
+        if ipas:
+            obj['ipa'] = ipas
+        if rhymes:
+            obj['rhymes'] = rhymes
+        if tags:
+            obj['sound_tags'] = tags
+        obj.pop('sounds')
