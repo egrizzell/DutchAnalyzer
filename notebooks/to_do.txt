@@ -1,0 +1,6 @@
+Conceptual High Level:
+- Currently the dataset has several problems:
+    1. It is not consistant across keys in the dataset
+    2. The json is very nested
+    3. There are significant numbers of duplicates. 
+    4. Extracting data and flattening these definitions is hard. What even is a sense?
