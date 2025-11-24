@@ -4,83 +4,6 @@ import datetime
 from pathlib import Path
 from dutchanalyzer.utilities.utils import *
 from dutchanalyzer.utilities.json_utils import *
-# Pandas Utils
-
-def summarize_df(df: pd.DataFrame, name: str = None, num_top_values=10, dsrc='EEP') -> pd.DataFrame:
-    """
-    Summarize a DataFrame similar to df.info(), but with:
-      - shape
-      - non-null count
-      - unique count
-      - top 10 value counts (as string)
-    """
-    summary_data = []
-
-    for col in df.columns:
-        non_null = df[col].notna().sum()
-        unique_vals = df[col].nunique(dropna=True)
-        top_vals = df[col].value_counts(dropna=False).head(num_top_values)
-        top_vals_str = ", ".join(f"{idx}:{val}" for idx, val in top_vals.items())
-
-        summary_data.append({
-            "dataframe_name": name,
-            'column_number': df.get_loc(col),
-            "column": col,
-            "dtype": str(df[col].dtype),
-            "non_null_count": non_null,
-            "unique_count": unique_vals,
-            "top_10_values": top_vals.values,
-            "top_10_values_str": top_vals_str,
-            "shape_rows": df.shape[0],
-            "shape_cols": df.shape[1],
-        })
-    summary_df = pd.DataFrame(summary_data)
-    summary_df['dsrc'] = dsrc
-    return summary_df
-
-
-def log_df_summary(df_log, df, name, notes='', dsrc='', date=datetime.date.today().__format__("%d-%m-%y"), num_top_values=10):
-    """
-    Append a DataFrame summary to an existing log DataFrame.
-    Creates a new one if df_log is None or empty.
-    """
-    summary = summarize_df(df, name, num_top_values, dsrc)
-    if df_log is None or df_log.empty:
-        df_log = summary
-        df_log['notes'] = notes
-        df_log['date'] = date
-        return df_log
-    else:
-        return pd.concat([df_log, summary], ignore_index=True)
-
-def get_equal_definitions(df):
-    return df[df['word'] == df['gloss']]
-
-def get_duplicate_words(df, filter_by=['word', 'pos', 'gloss']):
-    # repeated = (
-    # df.groupby(['word', 'pos', 'gloss'])
-    # .filter(lambda g: len(g) > 1)
-    # .groupby(['word', 'pos', 'gloss'], as_index=False)
-    # .agg({'gloss': list})
-    #         )
-    # duplicates = duplicates[duplicates['pos'] > 1]
-    duplicates = df[df.duplicated(subset=filter_by, keep=False)]
-    return duplicates
-
-
-def get_translations_list(tlist: list):
-    new_t_list = []
-    if tlist:
-        for tl in tlist:
-            if type(tl) == dict:
-                if tl.get('word'):
-                    new_t_list.append(tl)
-                else:
-                    tl.get('sense')
-    return new_t_list
-
-def return_non_na(df, col):
-    return df[~df[col].isna()]
 
 def replace_letters_in_word(word, original_letters, replace_with, na_return=''):
     if len(word) < len(original_letters):
@@ -152,3 +75,5 @@ def display_results_overview(df, check_changed=True):
             print("Number of words in other dictionary from test: ", len(df[df[col] == True]))
             
             print("Number of words changed in other dictionary: ", number_words_changed[col].value_counts())
+
+
