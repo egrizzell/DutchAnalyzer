@@ -7,4 +7,7 @@ notebooks/excluded/
 *.egg
 PROJECT_PLAN.md
 src/dutch_analyzer.egg-info
+*.pyc
+settings.json
+quicktype_functions.py
 
