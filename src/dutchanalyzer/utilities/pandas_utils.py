@@ -114,5 +114,8 @@ def sort_df_columns(df, start_cols=['word', 'pos', 'lang_code', 'standard_lang',
     new_cols = protected_cols + unprotected_cols + end
     df = df.loc[:, new_cols]
     return df
-    
+
+def return_non_na_drop_cols(df, col):
+    new_df = df[~df[col].isna()]
+    return new_df.dropna(axis=1, how='all')
     

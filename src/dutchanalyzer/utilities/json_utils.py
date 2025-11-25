@@ -111,7 +111,43 @@ def safe_dict(obj_str: str):
             return ast.literal_eval(obj_str)
         except Exception:
             return ""       # fallback
-        
+
+def filter_translations_regex(obj_str: str):
+    translations_pattern = r'"translations"\s*:\s*\[({.*?})\]'
+    translations_block = re.compile(translations_pattern, re.DOTALL)
+    gen_lang_block_pattern = r'(\{[^{}]*?"lang"\s*:\s*"(English|Engels|Dutch|Nederlands|Old English|Oudengels|Old Saxon|Oudnederlands|Dutch Low Saxon|Middle Dutch|Middelnederlands|Old Dutch|Middle English|Limburgish|Oudnederlands|Middenengels|Middelengels|Simple English|Eenvoudig Engels)"[^{}]*?\})'
+    rarer_lang_block_patterns = r'\{[^{}]*?"lang"\s*:\s*"(Old English|Oudengels|Old Saxon|OudenNederlands|Dutch Low Saxon|Middle Dutch|Old Dutch|Middle English|Limburgish)"[^{}]*?\}'
+    gen_lang_block = re.compile(gen_lang_block_pattern, re.DOTALL)
+    en_translation_pattern = r'\{[^{}]*?"lang_code"\s*:\s*"(en|eng)"[^{}]*?\}'
+    nl_translation_pattern = r'\{[^{}]*?"lang_code"\s*:\s*"nl"[^{}]*?\}'
+    engels_translation_pattern = r'\{[^{}]*?"lang"\s*:\s*"Engels"[^{}]*?\}'
+    english_translation_pattern = r'\{[^{}]*?"lang"\s*:\s*"English"[^{}]*?\}'
+    dutch_translation_pattern = r'\{[^{}]*?"lang"\s*:\s*"Dutch"[^{}]*?\}'
+    nederlands_translation_pattern = r'\{[^{}]*?"lang"\s*:\s*"Nederlands"[^{}]*?\}'
+    match = translations_block.search(obj_str)
+    
+    while match is not None:
+        if match:
+            new_translations_str = '"translations": ['
+            start, end = match.span()
+            m = match.group(0)
+            dn = gen_lang_block.findall(m)
+        if dn:
+            
+            dn = [safe_dict(x[0]) for x in dn]
+            str_dn = '[' + ', '.join(json.dumps(x) for x in dn) + ']'
+            
+            obj_str = obj_str[:start]+ '"translations": ' + str_dn + obj_str[end:]
+            match = translations_block.search(obj_str, start + len(str_dn))
+        else:
+            to_remove_end = end
+            if end < len(obj_str) and obj_str[end] == ',':
+                to_remove_end += 1
+            obj_str = obj_str[:start] + obj_str[to_remove_end:]
+            match = translations_block.search(obj_str, start)
+
+    return obj_str
+
 def lookup_lang_code(lang):
     if not lang:
         return None
@@ -432,6 +468,98 @@ def sort_entry(obj, code=None, lang=None, standard_lang=None):
 
     return new_obj
 
+def get_file_wl_code(file):
+    if isinstance(file, Path):
+        file = file.stem
+
+    elif '\\' in file and '.' in file:
+        file = file.split('\\')[-1]
+        file = file.split('.')[0]
+        
+    if 'EEF' in file:
+        return 'EEF'
+    if 'ENF' in file:
+        return 'ENF'
+    if 'NNF' in file:
+        return 'NNF'
+    if 'NEF' in file:
+        return 'NEF'
+    if 'ENR' in file:
+        return 'ENR'
+    if 'EER' in file:
+        return 'EER'
+    if 'NNR' in file:
+        return 'NNR'
+    if 'NER' in file:
+        return 'NER'
+    return ''
+
+def filter_pos(obj, banned_pos = ['num', 'symbol', 'phrase', 'character', 'punct', 'abbrev', 'proverb']):
+    if obj.get('pos', '') in banned_pos:
+        return None
+    return obj
+
+def overwrite_file(file, new_file):
+    file_path = Path(file)
+    new_file_path = Path(new_file)
+    if file_path.exists() and new_file_path.exists():
+        os.remove(file)
+        Path.rename(new_file_path, file)
+    print(f'{file} was overwritten with {new_file}')
+
+def current_filter_obj(obj): 
+    if obj:
+        obj = sort_standardize_entry(obj)
+    return obj
+
+def overwrite_file_with_filter_operations(file, filter_ops=['standardize_entries'], batch_size=10000):
+    batch = []
+    if isinstance(file, Path):
+        file = file.__str__()
+    
+    total_lines = count_lines_with_progress(file)
+    file_list = file.split('\\')
+    out_name = file_list[-1].split('.')[0] + '_temp.jsonl'
+    out_file = '\\'.join(file_list[0:-1]) + '\\' +out_name
+    if 'add_wl_code' in filter_ops:
+        wl_code = get_file_wl_code(file)
+        
+    with open(file, 'r', encoding='utf-8') as f:
+        with open(out_file, 'w+', encoding='utf-8') as out:
+            for i, line in tqdm(enumerate(f), total=total_lines):
+                obj = json.loads(line)
+                if obj:
+                    if 'current_filter' in filter_ops:
+                        obj = current_filter_obj(obj)
+                        if not obj:
+                            continue
+                    if 'pos' in filter_ops:
+                        obj = filter_pos(obj)
+                        if not obj:
+                            continue
+                    if 'standardize_entries' in filter_ops:
+                        obj = sort_standardize_entry(obj)
+                        if not obj:
+                            continue
+                    if 'add_wl_code' in filter_ops:
+                        if wl_code and obj:
+                            obj['wl_code'] = wl_code
+                    if obj:
+                        batch.append(obj)
+                    if len(batch) > batch_size:
+                        for item in batch:
+                            json.dump(item, out, ensure_ascii=False)
+                            out.write('\n')
+                        batch = []
+            if batch:
+                for item in batch:
+                    json.dump(item, out, ensure_ascii=False)
+                    out.write('\n')
+    response = input(f'are you sure you want to overwrite {file} with {out_file}? y/n')
+    if response == 'y':
+        overwrite_file(file, out_file)
+    else:
+        print('aborted temp file saved as: ', out_file)
 
 
 def sort_filter_sense(obj: dict, pop_examples=True) -> dict:
@@ -572,11 +700,12 @@ def sort_standardize_entry(obj: dict, pop_examples=True) -> dict:
     new_sounds = []
     if 'sounds' in obj:
         for sound in obj['sounds']:
-            sound.pop('ogg_url', '')
-            sound.pop('mp3_url', '')
-            sound.pop('audio', '')
-            if sound:
-                new_sounds.append(sound)
+            if isinstance(sound, dict):
+                sound.pop('ogg_url', '')
+                sound.pop('mp3_url', '')
+                sound.pop('audio', '')
+                if sound:
+                    new_sounds.append(sound)
     ## Add Remaining Keys
     obj_keys = sorted(list(obj.keys()))
     for key in obj_keys:
@@ -658,24 +787,127 @@ def extract_words_senses(raw_entry: dict):
         word_entry['wl_code'] = raw_entry['wl_code']
     return word_entry
 
-def process_obj(in_file, entries_out_file, wl_code, definitions_out_file=None, batch_size=1000, break_point=-1):
+
+def en_keep_before_load(line):
+    line = line.strip()
+    line_len = len(line)
+    brack_index = line.rfind(']')
+    if brack_index == line_len - 2:
+      left_bracket = line.rfind('[')
+      line = line[:left_bracket].strip()
+      brack_index = line.rfind(']')
+      left_bracket = line.rfind('[')
+      line_len = len(line)
+
+    word_index = line.rfind(', "word": "')
+    lcr_index = line.rfind(', "lang_code": "')
+
+    if lcr_index > 0:
+      lang_code = line[lcr_index + len(', "lang_code": "') - 1: lcr_index + len('"lang_code": "') + 4]
+      lang_code = lang_code.strip('"')
+      lang_code = lang_code.strip()
+      if lang_code:
+        if not lookup_lang_from_code(lang_code):
+          
+          return False
+     
+    if word_index:
+        end = line[word_index + len(', "word": "') - 1:]
+        end = end.find(',')
+        word = line[word_index + len(', "word": '):end]
+        word = word.strip('"')
+        if word:
+          if has_cjk_or_arabic_fast(word):
+            return False
+          if not check_has_valid_chars(word):
+            return False
+    pos_index = line.rfind('], "pos": "')
+    
+    if pos_index > 0:
+        end_i = line.find(',', pos_index+4)
+        pos = line[pos_index+len('], "pos": "'):end_i]
+        pos = pos.strip('"')
+        pos = pos.strip()
+        banned_pos = ['num', 'symbol', 'phrase', 'character', 'punct', 'abbrev', 'proverb']
+        if pos in banned_pos:
+           return False
+    return True
+
+def nl_keep_before_load(line: str) -> bool:
+    
+    if has_cjk_or_arabic_fast(line, 30):
+        return False
+    
+    lc_loc = line.find('"lang_code": "', 0, 70)
+
+    if lc_loc > 0:
+        start = lc_loc+len('"lang_code": "')
+        lc_end = line.find('"', start)
+        lc = line[start:lc_end]
+        
+        lc = lc.strip()
+        if not lookup_lang_from_code(lc) and lc != 'unknown':
+            return False
+        
+    word_loc = line.find('"word": "')
+    if word_loc == 1:
+        end = line.find('"', word_loc + len('"word": "'))
+        word = line[word_loc + len('"word": "'):end].strip()
+        if not check_has_valid_chars(word):
+            return False
+    
+    banned_pos = ['num', 'symbol', 'phrase', 'character', 'punct', 'abbrev', 'proverb']
+    pos_loc = line.find('"pos": "')
+    if pos_loc == -1:
+        return False
+    cut_line = line[pos_loc + len('"pos": "'):]
+    end = cut_line.find('"')
+    pos = cut_line[:end].strip()
+    if pos in banned_pos:
+        return False
+    return True
+
+def process_file(in_file, entries_out_file, wl_code, definitions_out_file=None, batch_size=1000, break_point=-1):
     batch = []
     entries_batch = []
+    lang_2_lines = []
+    other_lines = []
     error_lines = []
     with open(in_file, 'r', encoding='utf-8') as f:
         with open(entries_out_file, 'w+', encoding='utf-8') as out:
             
-            for i, line in tqdm(enumerate(f)):
+            for i, line in tqdm(enumerate(f), total=count_lines_with_progress(f)):
                 if break_point > 0:
                     if i > break_point:
                         print(entries_batch)
                         break
                 if line:
+                    curr_wl_code = ''
+                    if wl_code == 'ERAW' or wl_code == 'NRAW':
+                        
+                        line = filter_translations_regex(line)
+                        if wl_code == 'ERAW':
+                            curr_wl_code = 'E'
+                            if not en_keep_before_load(line):
+                                continue
+                        if wl_code == 'NRAW':
+                            curr_wl_code = 'N'
+                            if not nl_keep_before_load:
+                                continue      
+
                     try:
                         obj = json.loads(line)
                         obj = sort_standardize_entry(obj)
                         if obj:
-                            obj['wl_code'] = wl_code
+                            if curr_wl_code:
+                                curr_wl_code = curr_wl_code + obj.get('lang_code') + 'R'
+                            else:
+                                curr_wl_code = wl_code
+
+                            obj['wl_code'] = curr_wl_code
+                            lang_code = obj.get('lang_code')
+                            
+
                             entries_batch.append(obj)
 
                             if len(entries_batch) > batch_size:
