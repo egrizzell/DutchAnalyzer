@@ -12,20 +12,30 @@ import ujson
 from pathlib import Path
 import datetime
 import json
+import string
+from dutchanalyzer.config import PROJ_ROOT
+from dutchanalyzer.utilities.bool_filters import *
+from dutchanalyzer.utilities.utils import make_temp_file_path
 
 
-def count_lines_with_progress(file_path, chunk_size=1024 * 1024):
+# Checking File Info
+def count_lines_with_progress(file_path, chunk_size=1024 * 1024, quiet=False):
+    if isinstance(file_path, Path):
+        file_path = file_path.__str__()
     total_size = os.path.getsize(file_path)
     lines = 0
-    longest_line = 0
-    num_chunks_longest = 0
-    current_chunks_count = 1
-    with open(file_path, 'rb') as f, tqdm(total=total_size, unit='B', unit_scale=True, desc="Counting Lines") as pbar:
-        while chunk := f.read(chunk_size):
-            chunk_count = chunk.count(b'\n')
-            
-            lines += chunk_count
-            pbar.update(len(chunk))
+    if quiet == False:
+        with open(file_path, 'rb') as f, tqdm(total=total_size, unit='B', unit_scale=True, desc="Counting Lines") as pbar:
+            while chunk := f.read(chunk_size):
+                chunk_count = chunk.count(b'\n')
+                lines += chunk_count
+                pbar.update(len(chunk))
+        print(f'Lines in file: {lines}')
+    else:
+        with open(file_path, 'rb') as f:
+            while chunk := f.read(chunk_size):
+                chunk_count = chunk.count(b'\n')
+                lines += chunk_count
     return lines
 
 def get_longest_line(file_path, chunk_size=1024 * 1024):
@@ -65,65 +75,27 @@ def get_longest_line(file_path, chunk_size=1024 * 1024):
             
     return lines, longest_lines
                 
-def check_has_valid_chars(text, num_to_check=2):
-    allowed_letters = "a-zA-ZáéíóúÁÉÍÓÚèàòùÈÀÒÙëïöüËÏÖÜ"
-    # punctuation (we escape it safely)
-    allowed_punct = re.escape("'- .,;:")
-    # combine safely; note the hyphen is at the *end* to avoid range issues
-    allowed_chars = allowed_letters + allowed_punct + "-"
-    try: 
-        text = str(text).strip()
-        first_chars = text[:num_to_check]  # take first one or two characters
-        # check each character individually
-        for ch in first_chars:
-            if not re.match(f"[{allowed_chars}]", ch):
-                return False
-        return True
-    except Exception as e: 
-        print("Error:", e)
-        return False
-    
-def has_cjk_or_arabic_fast(text: str, limit: int = 50) -> bool:
-    """Return True if the first `limit` characters contain
-    any Chinese, Japanese, Korean, or Arabic/Farsi character."""
-    for ch in text[:limit]:
-        cp = ord(ch)
-        # CJK (Chinese/Japanese/Korean)
-        if (
-            0x4E00 <= cp <= 0x9FFF or  # CJK Unified Ideographs
-            0x3400 <= cp <= 0x4DBF or  # CJK Ext A
-            0xF900 <= cp <= 0xFAFF or  # CJK Compatibility
-            0x3040 <= cp <= 0x30FF or  # Hiragana + Katakana
-            0x31F0 <= cp <= 0x31FF or  # Katakana Extensions
-            0xAC00 <= cp <= 0xD7AF or  # Hangul Syllables
-            # Arabic / Farsi
-            0x0600 <= cp <= 0x06FF or
-            0x0750 <= cp <= 0x077F or
-            0x08A0 <= cp <= 0x08FF or
-            0xFB50 <= cp <= 0xFEFF
-        ):
-            return True  # stop immediately
-    return False
-    
+def save_batch_to_file(batch, out_file, mode):
+    with open(out_file, mode, encoding='utf-8') as out:
+        for obj in batch:
+            json.dump(obj, out, ensure_ascii=False)
+            out.write('\n')
+
+# Safe Json Utils    
 def safe_dict(obj_str: str):
     if isinstance(obj_str, str):
         try:
             return ast.literal_eval(obj_str)
         except Exception:
-            return ""       # fallback
+            return ""       
 
+
+# Filtering Languages and Translations
 def filter_translations_regex(obj_str: str):
     translations_pattern = r'"translations"\s*:\s*\[({.*?})\]'
     translations_block = re.compile(translations_pattern, re.DOTALL)
     gen_lang_block_pattern = r'(\{[^{}]*?"lang"\s*:\s*"(English|Engels|Dutch|Nederlands|Old English|Oudengels|Old Saxon|Oudnederlands|Dutch Low Saxon|Middle Dutch|Middelnederlands|Old Dutch|Middle English|Limburgish|Oudnederlands|Middenengels|Middelengels|Simple English|Eenvoudig Engels)"[^{}]*?\})'
-    rarer_lang_block_patterns = r'\{[^{}]*?"lang"\s*:\s*"(Old English|Oudengels|Old Saxon|OudenNederlands|Dutch Low Saxon|Middle Dutch|Old Dutch|Middle English|Limburgish)"[^{}]*?\}'
     gen_lang_block = re.compile(gen_lang_block_pattern, re.DOTALL)
-    en_translation_pattern = r'\{[^{}]*?"lang_code"\s*:\s*"(en|eng)"[^{}]*?\}'
-    nl_translation_pattern = r'\{[^{}]*?"lang_code"\s*:\s*"nl"[^{}]*?\}'
-    engels_translation_pattern = r'\{[^{}]*?"lang"\s*:\s*"Engels"[^{}]*?\}'
-    english_translation_pattern = r'\{[^{}]*?"lang"\s*:\s*"English"[^{}]*?\}'
-    dutch_translation_pattern = r'\{[^{}]*?"lang"\s*:\s*"Dutch"[^{}]*?\}'
-    nederlands_translation_pattern = r'\{[^{}]*?"lang"\s*:\s*"Nederlands"[^{}]*?\}'
     match = translations_block.search(obj_str)
     
     while match is not None:
@@ -132,26 +104,33 @@ def filter_translations_regex(obj_str: str):
             start, end = match.span()
             m = match.group(0)
             dn = gen_lang_block.findall(m)
-        if dn:
-            
-            dn = [safe_dict(x[0]) for x in dn]
-            str_dn = '[' + ', '.join(json.dumps(x) for x in dn) + ']'
-            
-            obj_str = obj_str[:start]+ '"translations": ' + str_dn + obj_str[end:]
-            match = translations_block.search(obj_str, start + len(str_dn))
-        else:
-            to_remove_end = end
-            if end < len(obj_str) and obj_str[end] == ',':
-                to_remove_end += 1
-            obj_str = obj_str[:start] + obj_str[to_remove_end:]
-            match = translations_block.search(obj_str, start)
-
+            if dn:
+                
+                dn = [safe_dict(x[0]) for x in dn]
+                str_dn = '[' + ', '.join(json.dumps(x) for x in dn) + ']'
+                
+                obj_str = obj_str[:start] + '"translations": ' + str_dn + obj_str[end:]
+                match = translations_block.search(obj_str, start + len(str_dn))
+            else:
+                to_remove_end = end
+                if obj_str[end] == ',':
+                    to_remove_end += 1
+                if obj_str[end + 1] == ']' or obj_str[end + 1] == '}':
+                    if obj_str[start - 1] == ',':
+                        start = start - 1
+                    elif obj_str[start - 2] == ',':
+                        start = start - 2
+                obj_str = obj_str[:start] + obj_str[to_remove_end:]
+                match = translations_block.search(obj_str, start)
+    obj_str = obj_str.replace(', ]', ']')
+    obj_str = obj_str.replace(', }', '}')
     return obj_str
 
 def lookup_lang_code(lang):
     if not lang:
         return None
     lang = lang.lower()
+    lang = lang.strip()
     names_to_codes = {
         # English
     "english": "en",
@@ -212,8 +191,6 @@ def lookup_lang_code(lang):
     return names_to_codes.get(lang)
 
 def lookup_lang_from_code(lang_code):
-    if not lang_code:
-        return None
     
     codes_to_names = {
     "en": {
@@ -278,60 +255,16 @@ def lookup_lang_from_code(lang_code):
         'standard': 'pre_dutch'
         }
     }
-    if lang_code:
-        name = codes_to_names.get(lang_code)
-        if name:
-            return name['standard']
+    if not lang_code:
         return None
+    lang_code = lang_code.lower()
+    lang_code = lang_code.strip()
+    name = codes_to_names.get(lang_code)
+    if name:
+        return name['standard']
     return None
 
-def standardize_translation(obj: dict, lang_codes_to_keep=[], keep_no_lang=False, source='EEF', sense_index=-1) -> dict | None:
-    if lang_codes_to_keep == []:
-        lang_codes_to_keep = ['nl', 'en', 'simple', 'ang', 'dum', 'nds', 'odt', 'nds-nl', 'enm', 'eng', 'nld']
-
-    word = obj.get('word', '')
-    sense = obj.get('sense', '')
-
-    if word == '' and sense == '':
-        return None
-    
-    lang_code = obj.get('lang_code', '').lower()
-    lang = obj.get('lang', '').lower()
-    
-    if lang_code == '':
-        lang_code = obj.get('code', '').lower()
-        
-    new_translation = {}
-    if keep_no_lang == False and lang_code == '' and lang == '':
-        return None
-
-    if lang_code == '' and lang == '':
-        lang_code = 'unk'
-        lang = 'unknown'
-
-    elif lang == '':
-        lang = lookup_lang_from_code(lang_code)
-
-    elif lang_code == '':
-        lang_code = lookup_lang_code(lang)
-
-        if lang_code not in lang_codes_to_keep:
-            return None
-    
-    standard_lang = lookup_lang_from_code(lang_code)
-    if not standard_lang:
-        return None    
-    new_translation = {'word': word,
-                        'lang_code': lang_code,
-                        'lang': lang,
-                        'standard_lang': standard_lang}
-    
-    obj_items = sorted(obj.items())
-    for key, val in obj_items:
-        if key not in new_translation:
-            new_translation[key] = val
-    return new_translation
-
+# Sorting 
 def sort_dict(obj, exclude=[], prepend=[]):
     new_obj = {}
     if prepend:
@@ -355,13 +288,74 @@ def sort_dict_list(obj: list, sort_by='word', sort_dicts=False, sort_dicts_kwarg
             sorted_obj[i] = nd
     return sorted_obj
 
-def sort_translations(translations: list, sort_by='lang_code') -> list:
+
+def sort_translations(translations: list, sort_by='lang_code', sort_words=True) -> list:
     if not translations:
         return []
-    sorted_translations = sorted(translations, key=lambda translations: translations[sort_by])
+    if sort_words:
+        sorted_translations = sorted(translations, key=lambda translations: translations['word'])
+        split_dict = split_langs(sorted_translations)
+        split_dict_keys = list(split_dict.keys())
+        split_dict_keys.sort()
+        sorted_translations = []
+        if 'en' in split_dict_keys:
+            sorted_translations.extend(split_dict['en'])
+            split_dict_keys.remove('en')
+        if 'nl' in split_dict_keys:
+            sorted_translations.extend(split_dict['nl'])
+            split_dict_keys.remove('nl')
+        for k in split_dict_keys:
+            sorted_translations.extend(split_dict[k])
+    else:
+        sorted_translations = sorted(translations, key=lambda translations: translations[sort_by])
     return sorted_translations
+
+# Standardization of Entries
+def standardize_translation(obj: dict) -> dict | None:
+    word = obj.get('word', '')
+    sense = obj.get('sense', '')
+
+    if word == '' and sense == '':
+        return None
     
-def filter_categories(obj: list):
+    lang_code = obj.get('lang_code', '')
+    lang = obj.get('lang', '').lower()
+    
+    if lang_code == '':
+        lang_code = obj.get('code', '')
+        
+    new_translation = {}
+    
+    if lang_code == '' and lang == '':
+        return None
+
+    elif lang == '':
+        lang = lookup_lang_from_code(lang_code)
+        if not lang:
+            return None
+
+    elif lang_code == '':
+        lang_code = lookup_lang_code(lang)
+        if not lang_code:
+            return None
+        
+    lang = lookup_lang_from_code(lang_code)
+    if not lang:
+        return None    
+    new_translation = {'word': word,
+                        'lang_code': lang_code,
+                        'lang': lang}
+    
+    sorted_keys = sorted(list(obj.keys()))
+
+    for key in sorted_keys:
+        if key not in new_translation:
+            new_translation[key] = obj[key]
+
+    return new_translation
+
+
+def filter_categories(obj: list) -> None|list:
     new_categories = []
 
     if not obj or not isinstance(obj, list):
@@ -369,30 +363,34 @@ def filter_categories(obj: list):
     
     for i, category in enumerate(obj):
         if isinstance(category, str):
+            category = category.strip()
             cut_cat = ''
             if category.startswith('Terms with') and category.endswith('translations') and 'incorrect' not in category:
                 cut_cat = category.removeprefix('Terms with')
                 cut_cat = cut_cat.removesuffix('translations')
                 cut_cat = cut_cat.strip()
-                lang_code2 = lookup_lang_code(cut_cat)
+                lang_code2 = lookup_lang_code(cut_cat.lower())
                 if lang_code2:
                     new_categories.append(category)
             elif category.startswith('Requests for'):
                 cut_cat = category.removeprefix('Requests for review of ')
                 cut_cat = category.removeprefix('Requests for attention concerning ')
                 cut_cat = category.removeprefix('Requests for translations into ')
-
-                cut_cat = category.removesuffix(' translations')
-                cut_cat = category.removesuffix(' entries')
+                
+                cut_cat = cut_cat.removesuffix(' translations')
+                cut_cat = cut_cat.removesuffix(' entries')
 
                 cut_cat = cut_cat.strip()
-                lang_code2 = lookup_lang_code(cut_cat)
+                lang_code2 = lookup_lang_code(cut_cat.lower())
                 if lang_code2:
                     new_categories.append(category)
                 
 
             elif category.startswith('Woorden in het'):
                 cut_cat = category.removeprefix('Woorden in het ')
+                if 'met' in cut_cat:
+                    cut_cat = cut_cat.split('met')[0]
+                    
                 lang_code2 = lookup_lang_code(cut_cat.strip())
                 if lang_code2:
                     new_categories.append(category)  
@@ -412,163 +410,100 @@ def filter_categories(obj: list):
                     new_categories.append(category)
             elif category.startswith("Woorden met") and 'referenties' in category:
                 continue
-            elif "Woorden in het Nederlands met audioweergave" == category:
+            elif category == 'Woorden in het Nederlands met audioweergave':
                 continue
             elif 'examples' in category:
                 continue
             else:
                 new_categories.append(category)
-    
+    new_categories.sort()
     return new_categories
 
 
-
-def sort_entry(obj, code=None, lang=None, standard_lang=None):
-    new_obj = OrderedDict()
-    if not obj or not isinstance(obj, [dict, OrderedDict]):
-        return None
-    new_obj['word'] = obj.pop('word', '')
-    new_obj['pos'] = obj.pop('pos', '')
-    if code:
-        new_obj['lang_code'] = code
-    else:
-        code = obj.pop('lang_code', '')
-        new_obj['lang_code'] = code
-        obj.pop('lang_code', '')
-    if lang:
-        new_obj['lang'] = lang
-        obj.pop('lang', '')
-    else: 
-        new_obj['lang'] = obj.pop('lang', '')
+def sort_entry_keys(obj, start_keys=['word', 'pos', 'lang_code', 'lang', 'senses'], end_keys=['translations', 'wl_code'], groups=['forms', 'etymology', 'nyms', 'categories']):
+    obj_keys = obj.keys()
+    start = [c for c in start_keys if c in obj_keys]
+    end = [c for c in end_keys if c in obj_keys]
+    protected_keys = start 
+    etymology_grouping = ['etymology_templates', 'etymology_text', 'etymology_tree', 'etymology_number']
+    forms_grouping = ['form_of','forms', 'alt_of', 'inflection_templates', 'derived']
+    nyms_grouping = ['synonyms', 'antonyms', 'hypernyms','hyponyms', 'troponyms', 'holonyms', 'meronyms']
+    categories_grouping = ['categories', 'instances', 'links', 'related', 'topics']
     
-    if standard_lang:
-        new_obj['standard_lang'] = standard_lang
-        obj.pop('lang', 'standard_lang')
-    else:
-        standard_lang = obj.pop('standard_lang', '')
-        if not standard_lang:
-            standard_lang = lookup_lang_from_code(code)
+    if groups:
+        for group in groups:
+            if 'forms' == group:
+                forms_grouping = [c for c in forms_grouping if c in obj_keys]
+                protected_keys += forms_grouping
+            if 'etymology' == group:
+                etymology_grouping = [c for c in etymology_grouping if c in obj_keys]
+                protected_keys += etymology_grouping
 
-        new_obj['standard_lang'] = standard_lang
-        obj.pop('lang', 'standard_lang')
-    
+            if 'nyms' == group:
+                nyms_grouping = [c for c in nyms_grouping if c in obj_keys]
+                protected_keys += nyms_grouping
 
-    senses = obj.pop('senses', [])
-    if senses:
-        senses = sorted(senses)
-    new_obj['senses'] = senses
+            if 'categories' == group:
+                categories_grouping = [c for c in categories_grouping if c in obj_keys]
+                protected_keys += categories_grouping
+    protected_keys = [c for c in protected_keys if c in obj_keys]
+    unprotected_keys = [c for c in obj_keys if c not in protected_keys and c not in end]
 
-    translations = obj.pop('translations', [])
-    if translations:
-        translations = sort_translations(translations)
-
-    new_items = sort_dict(obj, exclude=new_obj.keys() + ['translations', 'senses'])
-    
-    new_obj['translations'] = translations
-
-    return new_obj
+    unprotected_keys.sort()
+    return protected_keys + unprotected_keys + end
 
 def get_file_wl_code(file):
+    
     if isinstance(file, Path):
-        file = file.stem
-
-    elif '\\' in file and '.' in file:
-        file = file.split('\\')[-1]
-        file = file.split('.')[0]
+        file = file.__str__()
+    else:
+        file = str(file)
+    # elif '\\' in file and '.' in file:
+    #     file = file.split('\\')[-1]
+    #     file = file.split('.')[0]
         
-    if 'EEF' in file:
+    if 'EEF' in file or 'eef' in file:
         return 'EEF'
-    if 'ENF' in file:
+    if 'ENF' in file or 'enf' in file:
         return 'ENF'
-    if 'NNF' in file:
+    if 'NNF' in file or 'nnf' in file:
         return 'NNF'
-    if 'NEF' in file:
+    if 'NEF' in file or 'nef' in file:
         return 'NEF'
-    if 'ENR' in file:
+    if 'ENR' in file or 'enr' in file:
         return 'ENR'
-    if 'EER' in file:
+    if 'EER' in file or 'eer' in file:
         return 'EER'
-    if 'NNR' in file:
+    if 'NNR' in file or 'nnr' in file:
         return 'NNR'
-    if 'NER' in file:
+    if 'NER' in file or 'ner':
         return 'NER'
     return ''
 
-def filter_pos(obj, banned_pos = ['num', 'symbol', 'phrase', 'character', 'punct', 'abbrev', 'proverb']):
-    if obj.get('pos', '') in banned_pos:
-        return None
-    return obj
 
-def overwrite_file(file, new_file):
+
+def overwrite_file(file, new_file, quiet=False):
     file_path = Path(file)
     new_file_path = Path(new_file)
+    rel_file_path = file.relative_to(PROJ_ROOT)
+    new_rel_file_path = new_file.relative_to(PROJ_ROOT)
     if file_path.exists() and new_file_path.exists():
         os.remove(file)
         Path.rename(new_file_path, file)
-    print(f'{file} was overwritten with {new_file}')
-
-def current_filter_obj(obj): 
-    if obj:
-        obj = sort_standardize_entry(obj)
-    return obj
-
-def overwrite_file_with_filter_operations(file, filter_ops=['standardize_entries'], batch_size=10000):
-    batch = []
-    if isinstance(file, Path):
-        file = file.__str__()
     
-    total_lines = count_lines_with_progress(file)
-    file_list = file.split('\\')
-    out_name = file_list[-1].split('.')[0] + '_temp.jsonl'
-    out_file = '\\'.join(file_list[0:-1]) + '\\' +out_name
-    if 'add_wl_code' in filter_ops:
-        wl_code = get_file_wl_code(file)
-        
-    with open(file, 'r', encoding='utf-8') as f:
-        with open(out_file, 'w+', encoding='utf-8') as out:
-            for i, line in tqdm(enumerate(f), total=total_lines):
-                obj = json.loads(line)
-                if obj:
-                    if 'current_filter' in filter_ops:
-                        obj = current_filter_obj(obj)
-                        if not obj:
-                            continue
-                    if 'pos' in filter_ops:
-                        obj = filter_pos(obj)
-                        if not obj:
-                            continue
-                    if 'standardize_entries' in filter_ops:
-                        obj = sort_standardize_entry(obj)
-                        if not obj:
-                            continue
-                    if 'add_wl_code' in filter_ops:
-                        if wl_code and obj:
-                            obj['wl_code'] = wl_code
-                    if obj:
-                        batch.append(obj)
-                    if len(batch) > batch_size:
-                        for item in batch:
-                            json.dump(item, out, ensure_ascii=False)
-                            out.write('\n')
-                        batch = []
-            if batch:
-                for item in batch:
-                    json.dump(item, out, ensure_ascii=False)
-                    out.write('\n')
-    response = input(f'are you sure you want to overwrite {file} with {out_file}? y/n')
-    if response == 'y':
-        overwrite_file(file, out_file)
-    else:
-        print('aborted temp file saved as: ', out_file)
-
+    if quiet == False:
+        print(f'{rel_file_path} was overwritten with {new_rel_file_path}')
 
 def sort_filter_sense(obj: dict, pop_examples=True) -> dict:
     new_sense = {}
   
-    glosses = obj.pop('glosses', '')
-    translations = obj.pop('translations', '')
+    glosses = obj.get('glosses', '')
+    translations = obj.get('translations', '')
+    if not translations:
+        translations = obj.get('translation', '')
     translations = sort_translations(translations)
-    form_of = obj.pop('form_of', '')
+   
+    form_of = obj.get('form_of', '')
     if not form_of:
         form_of = obj.get('forms', '')
     
@@ -580,19 +515,29 @@ def sort_filter_sense(obj: dict, pop_examples=True) -> dict:
 
     if pop_examples:
         obj.pop('examples','')
+
     new_sense['glosses'] = glosses
-    if form_of:
-        new_sense['form_of'] = form_of
+    
+    if 'categories' in obj:
+        categories = filter_categories(obj.get('categories'))
+        if categories:
+            new_sense['categories'] = categories
+        else:
+            obj.pop('categories', '')
+
     synonyms = obj.get('synonyms')
     if synonyms:
         synonyms = sort_dict_list(synonyms, 'word', True)
         new_sense['synonyms'] = synonyms
-    
+        
+    if form_of:
+        new_sense['form_of'] = form_of
     
     sorted_keys = sorted(list(obj.keys()))
     for key in sorted_keys:
         if key not in new_sense and key != 'translations':
             new_sense[key] = obj[key]
+
     if translations:
         new_sense['translations'] = translations
 
@@ -604,80 +549,62 @@ def sort_standardize_entry(obj: dict, pop_examples=True) -> dict:
     word = obj.get('word')
     if not word:
         return None
+    
     if has_cjk_or_arabic_fast(word):
         return None
-    pos = obj.get('pos')
-    if not pos:
+    if not has_valid_chars(word):
         return None
-    if pos == 'name' or pos == 'abbrevation' or pos == 'proverb':
+    pos = obj.get('pos')
+    if is_standard_banned_pos(pos):
+        print('this should not have happened, pos')
         return None
     
-    new_obj['word'] = word
-    new_obj['pos'] = pos
     code = obj.get('lang_code')
-    lang = obj.get('lang', '').lower()
-    if not code:
+    if code:
+        if not lookup_lang_from_code(code):
+            return None
+    else:
         code = obj.get('code')
         if code:
-            standard_lang = lookup_lang_from_code(code)
-            if standard_lang:
+            if lookup_lang_from_code(code):
                 obj['lang_code'] = code
-                
                 obj.pop('code')
             else:
                 return None
         else:
+            lang = obj.get('lang', '').lower()
             code = lookup_lang_code(lang)
             if not code:
                 return None
     
-    standard_lang = obj.get('standard_lang')
-    if not standard_lang:
-        standard_lang = lookup_lang_from_code(code)
-    
-    if not standard_lang:
+    lang = lookup_lang_from_code(code)
+    if not lang:
         return None
     
-    if lang == '':
-        lang = standard_lang
-    new_obj['lang_code'] = code
-    new_obj['lang'] = lang
-    new_obj['standard_lang'] = standard_lang
-
-    try:
-        ## Filter Categories
-        categories = obj.get('categories')
-        if categories:
-            categories = filter_categories(categories)
-            if categories:
-                
-                new_obj['categories'] = sorted(categories)
-            
-            else: new_obj['categories'] = []
-        else:
-            new_obj['categories'] = []
-        
-    except:
-        print('categories failed ', categories)
-        raise
-    
+    new_keys = sort_entry_keys(obj)
+    categories = obj.get('categories')
+    if categories:
+        new_categories = filter_categories(categories)
+        if not new_categories:
+            if categories == ['Woorden in het Sallands'] or categories == ['Woorden in het Achterhoeks'] or categories == ['Woorden in het Veluws']:
+                new_categories = []
+            elif categories == ['Woorden in het Drents'] or categories == ['Woorden in het Gronings'] or categories == ['Woorden in het Stellingwerfs']:
+                new_categories = []
+            else:
+                print(categories)
+                new_categories = categories
     
     ## Filter Senses
     new_senses = []
     senses = obj.get('senses')
     if not senses:
         return None
-    if senses:
-        for sense in senses:
-            new_sense = sort_filter_sense(sense)
-            if new_sense and sense not in new_senses:
-                new_senses.append(new_sense)
-        if not new_senses:
-            new_senses = []
-    new_obj['senses'] = new_senses
-
-    if 'forms' in obj:
-        new_obj['forms'] = obj['forms']
+    for sense in senses:
+        new_sense = sort_filter_sense(sense)
+        if new_sense and sense not in new_senses:
+            new_senses.append(new_sense)
+        
+    
     ## Filter Etymologies
     new_etymology_templates = []
     if 'etymology_templates' in obj:
@@ -693,27 +620,19 @@ def sort_standardize_entry(obj: dict, pop_examples=True) -> dict:
                 for n in name:
                     if lookup_lang_from_code(n):
                        new_etymology_templates.append(ety_template)          
-        if new_etymology_templates:
-            new_obj['etymology_templates'] = new_etymology_templates
+        
 
     ## Filter Sounds 
     new_sounds = []
+    sounds = obj.get('sounds')
     if 'sounds' in obj:
-        for sound in obj['sounds']:
+        for sound in sounds:
             if isinstance(sound, dict):
                 sound.pop('ogg_url', '')
                 sound.pop('mp3_url', '')
                 sound.pop('audio', '')
-                if sound:
+                if sound and sound != {}:
                     new_sounds.append(sound)
-    ## Add Remaining Keys
-    obj_keys = sorted(list(obj.keys()))
-    for key in obj_keys:
-        if key not in new_obj and key != 'translations':
-            if key == 'sounds' and new_sounds:
-                new_obj['sounds'] = new_sounds
-            else:
-                new_obj[key] = obj[key]
 
     ## Filter Translations
     new_translations = []
@@ -721,19 +640,39 @@ def sort_standardize_entry(obj: dict, pop_examples=True) -> dict:
     try:
         if translations:
             for t in translations:
-                
                 translation = standardize_translation(t)
                 if translation:
                     new_translations.append(translation)
-            if new_translations:
-
-                new_translations = sort_translations(new_translations)
-            
-            new_obj['translations'] = new_translations
+        if new_translations:
+            new_translations = sort_translations(new_translations)
     except:
         print('translations failed', new_translations)
         raise
-
+    
+    for k in new_keys:
+        if k == 'translations':
+            if new_translations:
+                new_obj['translations'] = new_translations
+        elif k == 'sounds':
+            if new_sounds:
+                new_obj['sounds'] = new_sounds
+        elif k == 'categories':
+            if new_categories:
+                new_obj['categories'] = new_categories
+        elif k == 'etymology_templates':
+            if new_etymology_templates:
+                new_obj['etymology_templates'] = new_etymology_templates
+        elif k == 'senses':
+            if new_senses:
+                new_obj['senses'] = new_senses
+        elif k == 'lang':
+            new_obj['lang'] = lang
+        else:
+            val = obj[k]
+            if isinstance(val, str):
+                val = val.strip()
+            new_obj[k] = val
+    
     if new_obj:
         return new_obj
     return None
@@ -808,9 +747,8 @@ def en_keep_before_load(line):
       lang_code = lang_code.strip()
       if lang_code:
         if not lookup_lang_from_code(lang_code):
-          
           return False
-     
+        
     if word_index:
         end = line[word_index + len(', "word": "') - 1:]
         end = end.find(',')
@@ -819,7 +757,7 @@ def en_keep_before_load(line):
         if word:
           if has_cjk_or_arabic_fast(word):
             return False
-          if not check_has_valid_chars(word):
+          if not has_valid_chars(word):
             return False
     pos_index = line.rfind('], "pos": "')
     
@@ -827,21 +765,20 @@ def en_keep_before_load(line):
         end_i = line.find(',', pos_index+4)
         pos = line[pos_index+len('], "pos": "'):end_i]
         pos = pos.strip('"')
-        pos = pos.strip()
-        banned_pos = ['num', 'symbol', 'phrase', 'character', 'punct', 'abbrev', 'proverb']
-        if pos in banned_pos:
-           return False
+        if is_standard_banned_pos(pos):
+            return False
     return True
+
 
 def nl_keep_before_load(line: str) -> bool:
     
     if has_cjk_or_arabic_fast(line, 30):
         return False
     
-    lc_loc = line.find('"lang_code": "', 0, 70)
+    lc_loc = line.find(', "lang_code": "', 0, 70)
 
     if lc_loc > 0:
-        start = lc_loc+len('"lang_code": "')
+        start = lc_loc+len(', "lang_code": "')
         lc_end = line.find('"', start)
         lc = line[start:lc_end]
         
@@ -853,19 +790,20 @@ def nl_keep_before_load(line: str) -> bool:
     if word_loc == 1:
         end = line.find('"', word_loc + len('"word": "'))
         word = line[word_loc + len('"word": "'):end].strip()
-        if not check_has_valid_chars(word):
+        if not has_valid_chars(word):
             return False
     
-    banned_pos = ['num', 'symbol', 'phrase', 'character', 'punct', 'abbrev', 'proverb']
-    pos_loc = line.find('"pos": "')
+    banned_pos = ['num', 'symbol', 'phrase', 'character', 'punct', 'abbrev', 'proverb', 'name', 'number']
+    pos_loc = line.find(', "pos": "')
     if pos_loc == -1:
         return False
-    cut_line = line[pos_loc + len('"pos": "'):]
+    cut_line = line[pos_loc + len(', "pos": "'):]
     end = cut_line.find('"')
     pos = cut_line[:end].strip()
     if pos in banned_pos:
         return False
     return True
+
 
 def process_file(in_file, entries_out_file, wl_code, definitions_out_file=None, batch_size=1000, break_point=-1):
     batch = []
@@ -873,71 +811,70 @@ def process_file(in_file, entries_out_file, wl_code, definitions_out_file=None, 
     lang_2_lines = []
     other_lines = []
     error_lines = []
+    mode = 'w+'
+    def_mode = 'w+'
     with open(in_file, 'r', encoding='utf-8') as f:
-        with open(entries_out_file, 'w+', encoding='utf-8') as out:
-            
-            for i, line in tqdm(enumerate(f), total=count_lines_with_progress(f)):
-                if break_point > 0:
-                    if i > break_point:
-                        print(entries_batch)
-                        break
-                if line:
-                    curr_wl_code = ''
-                    if wl_code == 'ERAW' or wl_code == 'NRAW':
+        for i, line in tqdm(enumerate(f), total=count_lines_with_progress(f)):
+            if break_point > 0:
+                if i > break_point:
+                    print(entries_batch)
+                    break
+            if line:
+                curr_wl_code = ''
+                if wl_code == 'ERAW' or wl_code == 'NRAW':
+                    
+                    line = filter_translations_regex(line)
+                    if wl_code == 'ERAW':
+                        curr_wl_code = 'E'
+                        if not en_keep_before_load(line):
+                            continue
+                    if wl_code == 'NRAW':
+                        curr_wl_code = 'N'
+                        if not nl_keep_before_load:
+                            continue      
+
+                try:
+                    obj = json.loads(line)
+                    obj = sort_standardize_entry(obj)
+                    if obj:
+                        if curr_wl_code:
+                            curr_wl_code = curr_wl_code + obj.get('lang_code') + 'R'
+                        else:
+                            curr_wl_code = wl_code
+
+                        obj['wl_code'] = curr_wl_code
+                        lang_code = obj.get('lang_code')
                         
-                        line = filter_translations_regex(line)
-                        if wl_code == 'ERAW':
-                            curr_wl_code = 'E'
-                            if not en_keep_before_load(line):
-                                continue
-                        if wl_code == 'NRAW':
-                            curr_wl_code = 'N'
-                            if not nl_keep_before_load:
-                                continue      
 
-                    try:
-                        obj = json.loads(line)
-                        obj = sort_standardize_entry(obj)
-                        if obj:
-                            if curr_wl_code:
-                                curr_wl_code = curr_wl_code + obj.get('lang_code') + 'R'
-                            else:
-                                curr_wl_code = wl_code
+                        entries_batch.append(obj)
 
-                            obj['wl_code'] = curr_wl_code
-                            lang_code = obj.get('lang_code')
-                            
-
-                            entries_batch.append(obj)
-
-                            if len(entries_batch) > batch_size:
-                                for entry in entries_batch:
-                                    json.dump(entry, out, ensure_ascii=False)
-                                    out.write('\n')
-                                entries_batch = []
-                            if definitions_out_file:
-                                word_entry = extract_words_senses(obj)
-                                batch.append(word_entry)
-                                if len(batch) > batch_size:
-                                    with open(definitions_out_file, 'a+', encoding='utf-8') as def_out: 
-                                        for entry in batch:
-                                            json.dump(entry, def_out, ensure_ascii=False)
-                                            def_out.write('\n')
-                                        batch = []
-                    except Exception as e:
-                        error_lines.append((i, obj))
-                        print(line)
-                        print("Error on line: ", i, " Error: ", e)
-                        break
-            if entries_batch:
-                for entry in entries_batch:
-                    json.dump(entry, out, ensure_ascii=False)
-                    out.write('\n')  
-            if batch and definitions_out_file:
-                with open(definitions_out_file, 'a+', encoding='utf-8') as def_out: 
-                    for entry in batch:
-                        json.dump(entry, def_out, ensure_ascii=False)
-                        def_out.write('\n')
+                        if len(entries_batch) > batch_size:
+                            save_batch_to_file(entries_batch, entries_out_file, mode)
+                            if mode == 'w+':
+                                mode = 'a'
+                            entries_batch = []
+                        if definitions_out_file:
+                            word_entry = extract_words_senses(obj)
+                            batch.append(word_entry)
+                            if len(batch) > batch_size:
+                                save_batch_to_file(batch, definitions_out_file, def_mode)
+                                if def_mode == 'w+':
+                                    def_mode = 'a'
+                                    
+                                batch = []
+                except Exception as e:
+                    error_lines.append((i, obj))
+                    print(line)
+                    print("Error on line: ", i, " Error: ", e)
+                    break
+        if entries_batch:
+            save_batch_to_file(entries_batch, entries_out_file, mode)
+            if mode == 'w+':
+                mode = 'a'   
+        if batch and definitions_out_file:
+            save_batch_to_file(batch, definitions_out_file, def_mode)
+            if def_mode == 'w+':
+                def_mode = 'a'
     return entries_batch, batch, error_lines
 
 def make_key_tuples(obj, out_set=set(), prev_level_tuple=()):
@@ -987,3 +924,205 @@ def reformat_sounds(obj: dict):
         if tags:
             obj['sound_tags'] = tags
         obj.pop('sounds')
+
+def filter_sense_categories(obj: dict):
+    if obj:
+        senses = obj.get('senses')
+        if senses:
+            for i, sense in enumerate(senses):
+                categories = filter_categories(sense.get('categories', []))
+                if categories:
+                    obj['senses'][i]['categories'] = categories
+                else:
+                    deleted_categories = obj['senses'][i].pop('categories', '')
+
+def current_filter_obj(obj): 
+    if obj:
+        obj = sort_standardize_entry(obj)
+    return obj
+
+def overwrite_file_with_filter_operations(file, filter_ops=['standardize_entries'], batch_size=10000):
+    batch = []
+    if not isinstance(file, Path):
+        file = Path(file)
+    
+    out_file = make_temp_file_path(file)
+
+    total_lines = count_lines_with_progress(file)
+    mode = 'w+'
+    if 'add_wl_code' in filter_ops:
+        wl_code = get_file_wl_code(file)
+        
+    with open(file, 'r', encoding='utf-8') as f:
+        
+        for i, line in tqdm(enumerate(f), total=total_lines):
+            if line:
+                try:
+                    obj = json.loads(line)
+                    if obj:
+                        if 'current_filter' in filter_ops:
+                            obj = current_filter_obj(obj)
+                            if not obj:
+                                continue
+                        if 'pos' in filter_ops:
+                            if has_banned_pos(obj):
+                                continue
+                        if 'standardize_entries' in filter_ops:
+                            obj = sort_standardize_entry(obj)
+                            if not obj:
+                                continue
+                        if 'filter_sense_categories' in filter_ops:
+                            filter_sense_categories(obj)
+                        if 'add_wl_code' in filter_ops:
+                            if wl_code and obj:
+                                obj['wl_code'] = wl_code
+                        if obj:
+                            batch.append(obj)
+                        if len(batch) > batch_size:
+                            save_batch_to_file(batch, file, mode)
+                            if mode == 'w+':
+                                mode='a'
+                            batch = []
+                    
+                    if batch:
+                        save_batch_to_file(batch, file, mode)
+                        if mode == 'w+':
+                            mode='a'
+                except:
+                    print(line)
+        file_name = file.relative_to(PROJ_ROOT)
+        out_file_name = out_file.relative_to(PROJ_ROOT)
+        response = input(f'are you sure you want to overwrite {file_name} with {out_file_name}? y/n')
+        if response == 'y':
+            overwrite_file(file, out_file)
+        else:
+            print('aborted temp file saved as: ', out_file_name)
+    return out_file
+
+
+
+def saveletterlist(letter_list, save_folder, letter):
+    letter_file = Path(save_folder, 'letter_files', f'{letter}.jsonl')
+    with open(letter_file, 'a+', encoding='utf-8') as sf: 
+        for obj in letter_list:
+            json.dump(obj, sf, ensure_ascii=False)
+            sf.write('\n')
+
+def alpha_sort_large_file(file, save_folder, start_a=True, total_lines=None, batch_size=1000):
+    error_lines = []
+    if start_a:
+        letter_lines_dict = {ch: [] for ch in "abcdefghijklmnopqrstuvwxyz"}
+        letter_lines_dict["non_ascii"] = []
+        letter_lines_dict["non_a_z"] = []
+
+    else:
+        letter_lines_dict["non_a_z"] = []
+        for ch in string.ascii_lowercase():
+           letter_lines_dict[ch] = []
+        letter_lines_dict["non_ascii"] = []
+
+    sorted_file = Path(save_folder, f'{file.stem}_sorted.jsonl')
+    
+    if not Path(save_folder, 'letter_files').exists():
+        Path(save_folder, 'letter_files').mkdir(parents=True, exist_ok=True)
+
+    if not total_lines:
+        total_lines = count_lines_with_progress(file, quiet=True)
+    with open(file, 'r', encoding='utf-8') as f:
+        for i, line in tqdm(enumerate(f), total=total_lines, desc='Splitting and reading lines'):
+            if line:
+                try:
+                    loaded = json.loads(line)
+                    if loaded:
+                        word = loaded.get('word')
+                        if word:
+                            word = word.strip()
+                            if word:
+                                letter = word[0].lower()
+                            else:
+                                continue
+                            if letter.isnumeric():
+                                continue
+                            if not letter.isascii():
+                                letter = 'non_ascii'
+                            elif not letter.isalnum():
+                                letter = 'non_a_z'
+                            letter_lines_dict[letter].append(loaded)
+                            
+                            if len(letter_lines_dict[letter]) >= batch_size:
+                                saveletterlist(letter_lines_dict[letter], save_folder, letter)
+                                letter_lines_dict[letter] = []
+                except Exception as e:
+                    print('Error on line ', i, ': ', e)
+                    print(line)
+                    error_lines.append((i, line))
+        for k, v in letter_lines_dict.items():
+            if v:
+                saveletterlist(v, save_folder, k)
+
+    with open(sorted_file, 'w+', encoding='utf-8') as f:
+        for key in tqdm(letter_lines_dict.keys(), total=28, desc='sorting letters and writing to out file'):
+            print(f'Now processing: {key}')
+            letter_file = Path(save_folder, 'letter_files', f'{key}.jsonl')
+            if letter_file.exists():
+                with open(letter_file, 'r', encoding='utf-8') as lf:
+                    lines = lf.readlines()
+                    loaded_lines = [json.loads(x) for x in lines if x]
+                    loaded_lines = sort_dict_list(loaded_lines)
+                    for obj in loaded_lines:
+                        json.dump(obj, f, ensure_ascii=False)
+                        f.write('\n')
+                os.remove(letter_file.__str__())
+    os.rmdir(Path(save_folder, 'letter_files').__str__())    
+    return sorted_file
+
+def add_entry_ids(file, overwrite=False):
+    batch = []
+    batch_size = 100000
+    wl_code = get_file_wl_code(file)
+    out_file = make_temp_file_path(file)
+    mode = 'w+'
+    with open(file, 'r', encoding='utf-8') as f:
+        
+        for i, line in tqdm(enumerate(f)):
+            if line:
+                loaded = json.loads(line)
+                if loaded:
+                    if 'entry_id' not in loaded:
+                        loaded['entry_id'] = f'{wl_code}_{i}'
+                        sorted_keys = sort_entry_keys(loaded, start_keys=['entry_id', 'word', 'pos', 'lang_code', 'lang', 'senses'])
+                        obj = {}
+                        for k in sorted_keys:
+                            obj[k] = loaded[k]
+                    batch.append(obj)
+                
+            if len(batch) > batch_size:
+                save_batch_to_file(batch, out_file, mode)
+                if mode == 'w+':
+                    mode='a'
+                batch = []
+            
+        if batch:
+            save_batch_to_file(batch, out_file, mode)
+    if overwrite:
+        overwrite_file(file, out_file)
+    return batch, out_file
+
+# Getters
+def get_eid_word_pos(obj):
+    id = obj.get('entry_id')
+    word = obj.get('word')
+    pos = obj.get('pos')
+    return id, word, pos
+
+def get_eid_word_pos_senses(obj):
+    id = obj.get('entry_id')
+    word = obj.get('word')
+    pos = obj.get('pos')
+    senses = obj.get('senses')
+    return id, word, pos, senses
+
+if __name__ == '__main__':
+    # {"word": "free", "pos": "verb", "lang_code": "en", "lang": "english", "senses": [{"glosses": ["To make free; set at liberty; release."], "categories": ["English terms with quotations", "English transitive verbs"], "links": [["liberty", "liberty"], ["release", "release"]], "raw_glosses": ["(transitive) To make free; set at liberty; release."], "tags": ["transitive"]}, {"glosses": ["To rid of something that confines or oppresses."], "categories": ["English terms with quotations", "English transitive verbs", "Quotation templates to be cleaned"], "info_templates": [{"args": {"1": "en", "2": ":from"}, "name": "+obj", "extra_data": {"words": ["from"]}, "expansion": "[with from]"}], "links": [["rid", "rid"]], "raw_glosses": ["(transitive) To rid of something that confines or oppresses. [with from]"], "tags": ["transitive"]}, {"glosses": ["To relinquish (previously allocated memory) to the system."], "categories": ["English terms with quotations", "English transitive verbs", "Quotation templates to be cleaned", "en:Programming"], "links": [["programming", "programming#Noun"], ["relinquish", "relinquish"], ["allocate", "allocate"], ["memory", "memory"], ["system", "system"]], "raw_glosses": ["(transitive, programming) To relinquish (previously allocated memory) to the system."], "tags": ["transitive"], "topics": ["computing", "engineering", "mathematics", "natural-sciences", "physical-sciences", "programming", "sciences"]}], "forms": [{"form": "frees", "tags": ["present", "singular", "third-person"]}, {"form": "freeing", "tags": ["participle", "present"]}, {"form": "freed", "tags": ["participle", "past"]}, {"form": "freed", "tags": ["past"]}], "derived": [{"word": "befree"}, {"word": "free up"}], "etymology_templates": [{"name": "inh", "args": {"1": "en", "2": "enm", "3": "freen"}, "expansion": "Middle English freen"}, {"name": "inh", "args": {"1": "en", "2": "ang", "3": "frēon"}, "expansion": "Old English frēon"}, {"name": "inh", "args": {"1": "en", "2": "gmw-pro", "3": "*frijōn"}, "expansion": "Proto-West Germanic *frijōn"}, {"name": "inh", "args": {"1": "en", "2": "gem-pro", "3": "*frijōną"}, "expansion": "Proto-Germanic *frijōną"}, {"name": "der", "args": {"1": "en", "2": "ine-pro", "3": "*preyH-"}, "expansion": "Proto-Indo-European *preyH-"}, {"name": "cog", "args": {"1": "nl", "2": "vrijen"}, "expansion": "Dutch vrijen"}], "etymology_text": "From Middle English freen, freoȝen, from Old English frēon, frēoġan (“to free; make free”), from Proto-West Germanic *frijōn, from Proto-Germanic *frijōną, from Proto-Indo-European *preyH-, and is cognate with German freien, Dutch vrijen, Czech přát, Serbo-Croatian prijati, Polish sprzyjać.", "etymology_number": 2, "synonyms": [{"word": "befree"}, {"word": "emancipate"}, {"word": "let loose"}, {"word": "liberate"}, {"word": "manumit"}, {"word": "release"}, {"word": "unchain"}, {"word": "unfetter"}, {"word": "unshackle"}], "categories": ["English countable nouns", "English entries with incorrect language header", "English lemmas", "English nouns", "English terms derived from Middle English", "English terms derived from Old English", "English terms derived from Proto-Germanic", "English terms derived from Proto-Indo-European", "English terms derived from Proto-West Germanic", "English terms inherited from Middle English", "English terms inherited from Old English", "English terms inherited from Proto-Germanic", "English terms inherited from Proto-West Germanic", "English terms with homophones", "English verbs", "Entries with translation boxes", "Pages with 3 entries", "Pages with entries", "Rhymes:English/iː", "Rhymes:English/iː/1 syllable", "Terms with Dutch translations", "Terms with Old English translations", "en:Money"], "head_templates": [{"name": "en-verb", "args": {}, "expansion": "free (third-person singular simple present frees, present participle freeing, simple past and past participle freed)"}], "sounds": [{"enpr": "frē"}, {"ipa": "/fɹiː/"}, {"ipa": "[fɹɪi̯]"}, {"rhymes": "-iː"}, {"homophone": "three (th-fronting)"}], "translations": [{"word": "frēoġan", "lang_code": "ang", "lang": "old_english", "code": "ang", "sense": "to make free, set at liberty"}, {"word": "bevrijden", "lang_code": "nl", "lang": "dutch", "code": "nl", "sense": "to make free, set at liberty"}, {"word": "loslaten", "lang_code": "nl", "lang": "dutch", "code": "nl", "sense": "to make free, set at liberty"}, {"word": "laten gaan", "lang_code": "nl", "lang": "dutch", "code": "nl", "sense": "to make free, set at liberty"}], "wl_code": "EER"}
+    translations = [{"word": "frēoġan", "lang_code": "ang", "lang": "old_english", "code": "ang", "sense": "to make free, set at liberty"}, {"word": "bevrijden", "lang_code": "nl", "lang": "dutch", "code": "nl", "sense": "to make free, set at liberty"}, {"word": "loslaten", "lang_code": "nl", "lang": "dutch", "code": "nl", "sense": "to make free, set at liberty"}, {"word": "laten gaan", "lang_code": "nl", "lang": "dutch", "code": "nl", "sense": "to make free, set at liberty"}]
+    print(sort_translations(translations))

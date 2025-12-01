@@ -12,6 +12,15 @@ from pathlib import Path
 import datetime
 from dutchanalyzer.config import *
 
+def make_temp_file_path(file):
+    
+    if not isinstance(file, Path):
+        file = Path(file)
+    temp_name = f'{file.stem}_temp.jsonl'
+    folder = file.parents[0]
+    temp_file = Path(folder, temp_name)
+    return temp_file
+
 def safe_dict(obj_str: str):
     if isinstance(obj_str, str):
         try:
@@ -64,7 +73,6 @@ def safe_eval(x):
 def get_previous_save_folder(previous_dir_parent_folder=INTERIM_DATA_DIR, most_recent=True, days_ago=-1) -> Path:
     if type(previous_dir_parent_folder) == str or type(previous_dir_parent_folder) == os.path:
         previous_dir_parent_folder = Path(str(previous_dir_parent_folder))
-        print('Converting to Path')
 
     previous_path = previous_dir_parent_folder
 
@@ -72,19 +80,20 @@ def get_previous_save_folder(previous_dir_parent_folder=INTERIM_DATA_DIR, most_r
         days_ago_date = datetime.date.today() - datetime.timedelta(days=days_ago)
         days_ago_date_str = days_ago_date.__format__("%d-%m-%y")
         previous_path = Path(previous_dir_parent_folder, days_ago_date_str)
-       
+        if previous_path.exists():
+            return previous_path
     
     max_mtime = 0
     for dirname,subdirs,files in Path.walk(previous_path):
-        for fname in files:
-            full_path = dirname / fname
-            mtime = Path(full_path).stat().st_mtime
-            if mtime > max_mtime:
-                max_mtime = mtime
-                max_dir = dirname
-                
-
-                max_file = fname
+        for d in subdirs:
+            for fname in files:
+                full_path = dirname / fname
+                mtime = Path(full_path).stat().st_mtime
+                print(mtime)
+                if mtime > max_mtime:
+                    max_mtime = mtime
+                    max_dir = dirname
+                    max_file = fname
     if max_mtime == 0:
         print('No files in directory')
     else:
