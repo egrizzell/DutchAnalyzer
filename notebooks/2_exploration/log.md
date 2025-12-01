@@ -11,3 +11,4 @@
 ### 30-10
 - Have determined that all words have a sense
 - Shape of df after dropping several columns and the categories of symbol, character, 'num', and 'phrase' from df we are down to (2625841, 37) from (2637038, 51), after removing proverb and name it is now (2334244, 37)
+

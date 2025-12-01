@@ -1,0 +1,48 @@
+{
+	// Place your DutchAnalyzer workspace snippets here. Each snippet is defined under a snippet name and has a scope, prefix, body and 
+	// description. Add comma separated ids of the languages where the snippet is applicable in the scope field. If scope 
+	// is left empty or omitted, the snippet gets applied to all languages. The prefix is what is 
+	// used to trigger the snippet and the body will be expanded and inserted. Possible variables are: 
+	// $1, $2 for tab stops, $0 for the final cursor position, and ${1:label}, ${2:another} for placeholders. 
+	// Placeholders with the same ids are connected.
+	// Example:
+	// "Print to console": {
+	// 	"scope": "javascript,typescript",
+	// 	"prefix": "log",
+	// 	"body": [
+	// 		"console.log('$1');",
+	// 		"$2"
+	// 	],
+	// 	"description": "Log output to console"
+	// }
+	"open utf8":{
+		"prefix": ["with r", "rf8"],
+		"body": ["with open(file, 'r', encoding='utf-8') as f:"],
+		"description": "open file for reading with encoding utf-8"
+	}, 
+	"for line": {
+		"prefix": ["enm f", "for tl"],
+		"body": [
+			"for i, line in tqdm(enumerate(f), desc= '$1'):",
+				"\tif line:",
+					"\t \tobj = json.loads(line)",
+					"\t \tif obj:",
+						"\t \t \t$0"
+		]
+	},
+	
+	"if len batch": {
+		"prefix": ["if len", "ilbs"],
+		"body": ["if len(batch) > batch_size:",
+					"\tsave_batch_to_file(batch, out_file, mode)",
+					"\tif mode == 'w+':",
+					"\t \tmode='a'",
+					"\tbatch = []",
+				"$0"
+
+		]
+		}
+	
+
+	
+}
