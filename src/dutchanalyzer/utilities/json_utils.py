@@ -556,7 +556,6 @@ def sort_standardize_entry(obj: dict, pop_examples=True) -> dict:
         return None
     pos = obj.get('pos')
     if is_standard_banned_pos(pos):
-        print('this should not have happened, pos')
         return None
     
     code = obj.get('lang_code')
@@ -1025,7 +1024,7 @@ def alpha_sort_large_file(file, save_folder, start_a=True, total_lines=None, bat
     
     if not Path(save_folder, 'letter_files').exists():
         Path(save_folder, 'letter_files').mkdir(parents=True, exist_ok=True)
-
+    
     if not total_lines:
         total_lines = count_lines_with_progress(file, quiet=True)
     with open(file, 'r', encoding='utf-8') as f:
@@ -1060,19 +1059,19 @@ def alpha_sort_large_file(file, save_folder, start_a=True, total_lines=None, bat
             if v:
                 saveletterlist(v, save_folder, k)
 
-    with open(sorted_file, 'w+', encoding='utf-8') as f:
-        for key in tqdm(letter_lines_dict.keys(), total=28, desc='sorting letters and writing to out file'):
-            print(f'Now processing: {key}')
-            letter_file = Path(save_folder, 'letter_files', f'{key}.jsonl')
-            if letter_file.exists():
-                with open(letter_file, 'r', encoding='utf-8') as lf:
-                    lines = lf.readlines()
-                    loaded_lines = [json.loads(x) for x in lines if x]
-                    loaded_lines = sort_dict_list(loaded_lines)
-                    for obj in loaded_lines:
-                        json.dump(obj, f, ensure_ascii=False)
-                        f.write('\n')
-                os.remove(letter_file.__str__())
+    sorted_mode = 'w+'
+    for key in tqdm(letter_lines_dict.keys(), total=28, desc='sorting letters and writing to out file'):
+        print(f'Now processing: {key}')
+        letter_file = Path(save_folder, 'letter_files', f'{key}.jsonl')
+        if letter_file.exists():
+            with open(letter_file, 'r', encoding='utf-8') as lf:
+                lines = lf.readlines()
+                loaded_lines = [json.loads(x) for x in lines if x]
+                loaded_lines = sort_dict_list(loaded_lines)
+                save_batch_to_file(loaded_lines, sorted_file, sorted_mode)
+                if sorted_mode == 'w+':
+                    sorted_mode = 'a'
+            os.remove(letter_file.__str__())
     os.rmdir(Path(save_folder, 'letter_files').__str__())    
     return sorted_file
 
@@ -1080,6 +1079,8 @@ def add_entry_ids(file, overwrite=False):
     batch = []
     batch_size = 100000
     wl_code = get_file_wl_code(file)
+    if wl_code.endswith('R'):
+        wl_code = f'{wl_code[0:2]}F'
     out_file = make_temp_file_path(file)
     mode = 'w+'
     with open(file, 'r', encoding='utf-8') as f:

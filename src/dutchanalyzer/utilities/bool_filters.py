@@ -62,7 +62,7 @@ def has_word(obj: dict) -> bool:
     return False
 
 def is_standard_banned_pos(pos: str):
-    banned_pos=['num', 'symbol', 'phrase', 'character', 'punct', 'abbrev', 'proverb', '', None]
+    banned_pos=['name','num', 'symbol', 'phrase', 'character', 'punct', 'abbrev', 'proverb', '', None]
     return pos in banned_pos
 
 def has_banned_pos(obj: dict, banned_pos=[]):

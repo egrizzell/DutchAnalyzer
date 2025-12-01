@@ -133,6 +133,9 @@ def get_last_version(file_name, search_dir=DATA_DIR, partial_match=False):
         return max_file
 
 
+def get_current_save_folder():
+    today = datetime.date.today().__format__("%d-%m-%y")
+    return Path(INTERIM_DATA_DIR, 'cleaning', 'wikt', str(today))
 
 
 def what_is(term):
