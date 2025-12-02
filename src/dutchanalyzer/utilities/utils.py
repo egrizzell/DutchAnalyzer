@@ -21,6 +21,14 @@ def make_temp_file_path(file):
     temp_file = Path(folder, temp_name)
     return temp_file
 
+def make_file_path_with_suffix(file, suffix):
+    if not isinstance(file, Path):
+        file = Path(file)
+    temp_name = f'{file.stem}_{suffix}.jsonl'
+    folder = file.parents[0]
+    temp_file = Path(folder, temp_name)
+    return temp_file
+
 def safe_dict(obj_str: str):
     if isinstance(obj_str, str):
         try:
@@ -69,6 +77,7 @@ def safe_eval(x):
         except Exception:
             return []        # fallback
     return x
+
 
 def get_previous_save_folder(previous_dir_parent_folder=INTERIM_DATA_DIR, most_recent=True, days_ago=-1) -> Path:
     if type(previous_dir_parent_folder) == str or type(previous_dir_parent_folder) == os.path:

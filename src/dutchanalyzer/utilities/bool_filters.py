@@ -1,4 +1,5 @@
 import re
+import dutchanalyzer.utilities.json_utils as json_utils
 
 def has_valid_chars(text, num_to_check=2) -> bool:
     allowed_letters = "a-zA-ZáéíóúÁÉÍÓÚèàòùÈÀÒÙëïöüËÏÖÜ"
@@ -76,6 +77,27 @@ def filter_langs(obj: list, langs_to_keep=['en', 'nl']) -> list:
         return filter(is_en_nl, obj)
     return [x for x in obj if x.get('lang_code', '') in langs_to_keep]
 
+def any_in(obj, terms: list):
+    if not obj:
+        return False
+    elif isinstance(obj, str):
+        if any(el in obj for el in terms):
+            return True
+    elif isinstance(obj, list):
+        if isinstance(obj[0], str):
+            for o in obj:
+                if any(o in terms for o in obj):
+                    return True
+        elif isinstance(obj[0], list):
+            for o in obj:
+                if any_in(o, terms):
+                    return True  
+        else:
+            print('not implemented')
+    return False
+                
+
+
 
 def split_langs(obj: list) -> dict:
     split_langs = {}
@@ -105,6 +127,29 @@ def split_list(obj: list, split_by = ['has_word', 'sense_only']):
     else:
         print('not implemented')
     return split_conditions
+
+def is_inflection(obj: dict):
+    inflection_keywords = ['form of', 'inflection of', 'alt of', 'plural of', 'alternative of', 'abbrivation of', 'initialism of', 'diminutive of', 'declension of', 'participle of']
+    inflection_categories = ["Dutch adjective case forms" ,"Dutch non-lemma forms", "Dutch obsolete forms", "Dutch past participles"]
+    inflection_sense_tags = ["alt-of", 'form-of', "alternative", 'plural', 'subjunctive', 'second-person', 'indicative', 'first-person', 'third-person', 'singular', 'present', 'participle']
+    categories = obj.get('categories')
+    if any_in(categories, inflection_categories):
+        return True
+    senses = obj.get('senses')
+    forms = json_utils.get_forms(obj)
+    
+    if senses:
+        for sense in senses:
+            glosses = sense.get('glosses')
+            if any_in(glosses, inflection_keywords):
+                return True
+            tags = sense.get('tags')
+            if any_in(tags, inflection_sense_tags):
+                return True
+            
+
+            
+
 
 if __name__ == '__main__':
     print(is_standard_banned_pos('num'))

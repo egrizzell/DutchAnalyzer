@@ -468,6 +468,10 @@ def get_file_wl_code(file):
         return 'ENF'
     if 'NNF' in file or 'nnf' in file:
         return 'NNF'
+    if 'EOF' in file or 'eof' in file:
+        return 'EOF'
+    if 'NOF' in file or 'nof' in file:
+        return 'NOF'
     if 'NEF' in file or 'nef' in file:
         return 'NEF'
     if 'ENR' in file or 'enr' in file:
@@ -478,6 +482,7 @@ def get_file_wl_code(file):
         return 'NNR'
     if 'NER' in file or 'ner':
         return 'NER'
+    
     return ''
 
 
@@ -999,7 +1004,6 @@ def overwrite_file_with_filter_operations(file, filter_ops=['standardize_entries
     return out_file
 
 
-
 def saveletterlist(letter_list, save_folder, letter):
     letter_file = Path(save_folder, 'letter_files', f'{letter}.jsonl')
     with open(letter_file, 'a+', encoding='utf-8') as sf: 
@@ -1122,6 +1126,38 @@ def get_eid_word_pos_senses(obj):
     pos = obj.get('pos')
     senses = obj.get('senses')
     return id, word, pos, senses
+
+
+def get_forms(obj):
+    if 'forms' in obj:
+        return obj.get('forms')
+    elif 'form_of' in obj:
+        return obj.get('form_of')
+    else:
+        return None
+
+def get_all_glosses(obj):
+    if not obj:
+        return None
+    elif isinstance(obj, dict):
+        senses = obj.get('senses')
+        if not senses:
+            return None
+    elif isinstance(obj, list):
+        senses = obj
+    return [x.get('glosses') for x in senses if 'glosses' in x]
+        
+def make_eid_word_dict(obj: dict, extra_args=[]):
+    word_dict = {'entry_id': obj.get('entry_id'), 'word':obj.get('word')}
+    if extra_args:
+        for earg in extra_args:
+            if earg == 'forms':
+                forms = get_forms(obj)
+                if forms:
+                    word_dict['forms'] = forms
+            elif earg in obj:
+                word_dict[earg] = obj.get(f'{earg}')
+    return word_dict
 
 if __name__ == '__main__':
     # {"word": "free", "pos": "verb", "lang_code": "en", "lang": "english", "senses": [{"glosses": ["To make free; set at liberty; release."], "categories": ["English terms with quotations", "English transitive verbs"], "links": [["liberty", "liberty"], ["release", "release"]], "raw_glosses": ["(transitive) To make free; set at liberty; release."], "tags": ["transitive"]}, {"glosses": ["To rid of something that confines or oppresses."], "categories": ["English terms with quotations", "English transitive verbs", "Quotation templates to be cleaned"], "info_templates": [{"args": {"1": "en", "2": ":from"}, "name": "+obj", "extra_data": {"words": ["from"]}, "expansion": "[with from]"}], "links": [["rid", "rid"]], "raw_glosses": ["(transitive) To rid of something that confines or oppresses. [with from]"], "tags": ["transitive"]}, {"glosses": ["To relinquish (previously allocated memory) to the system."], "categories": ["English terms with quotations", "English transitive verbs", "Quotation templates to be cleaned", "en:Programming"], "links": [["programming", "programming#Noun"], ["relinquish", "relinquish"], ["allocate", "allocate"], ["memory", "memory"], ["system", "system"]], "raw_glosses": ["(transitive, programming) To relinquish (previously allocated memory) to the system."], "tags": ["transitive"], "topics": ["computing", "engineering", "mathematics", "natural-sciences", "physical-sciences", "programming", "sciences"]}], "forms": [{"form": "frees", "tags": ["present", "singular", "third-person"]}, {"form": "freeing", "tags": ["participle", "present"]}, {"form": "freed", "tags": ["participle", "past"]}, {"form": "freed", "tags": ["past"]}], "derived": [{"word": "befree"}, {"word": "free up"}], "etymology_templates": [{"name": "inh", "args": {"1": "en", "2": "enm", "3": "freen"}, "expansion": "Middle English freen"}, {"name": "inh", "args": {"1": "en", "2": "ang", "3": "frēon"}, "expansion": "Old English frēon"}, {"name": "inh", "args": {"1": "en", "2": "gmw-pro", "3": "*frijōn"}, "expansion": "Proto-West Germanic *frijōn"}, {"name": "inh", "args": {"1": "en", "2": "gem-pro", "3": "*frijōną"}, "expansion": "Proto-Germanic *frijōną"}, {"name": "der", "args": {"1": "en", "2": "ine-pro", "3": "*preyH-"}, "expansion": "Proto-Indo-European *preyH-"}, {"name": "cog", "args": {"1": "nl", "2": "vrijen"}, "expansion": "Dutch vrijen"}], "etymology_text": "From Middle English freen, freoȝen, from Old English frēon, frēoġan (“to free; make free”), from Proto-West Germanic *frijōn, from Proto-Germanic *frijōną, from Proto-Indo-European *preyH-, and is cognate with German freien, Dutch vrijen, Czech přát, Serbo-Croatian prijati, Polish sprzyjać.", "etymology_number": 2, "synonyms": [{"word": "befree"}, {"word": "emancipate"}, {"word": "let loose"}, {"word": "liberate"}, {"word": "manumit"}, {"word": "release"}, {"word": "unchain"}, {"word": "unfetter"}, {"word": "unshackle"}], "categories": ["English countable nouns", "English entries with incorrect language header", "English lemmas", "English nouns", "English terms derived from Middle English", "English terms derived from Old English", "English terms derived from Proto-Germanic", "English terms derived from Proto-Indo-European", "English terms derived from Proto-West Germanic", "English terms inherited from Middle English", "English terms inherited from Old English", "English terms inherited from Proto-Germanic", "English terms inherited from Proto-West Germanic", "English terms with homophones", "English verbs", "Entries with translation boxes", "Pages with 3 entries", "Pages with entries", "Rhymes:English/iː", "Rhymes:English/iː/1 syllable", "Terms with Dutch translations", "Terms with Old English translations", "en:Money"], "head_templates": [{"name": "en-verb", "args": {}, "expansion": "free (third-person singular simple present frees, present participle freeing, simple past and past participle freed)"}], "sounds": [{"enpr": "frē"}, {"ipa": "/fɹiː/"}, {"ipa": "[fɹɪi̯]"}, {"rhymes": "-iː"}, {"homophone": "three (th-fronting)"}], "translations": [{"word": "frēoġan", "lang_code": "ang", "lang": "old_english", "code": "ang", "sense": "to make free, set at liberty"}, {"word": "bevrijden", "lang_code": "nl", "lang": "dutch", "code": "nl", "sense": "to make free, set at liberty"}, {"word": "loslaten", "lang_code": "nl", "lang": "dutch", "code": "nl", "sense": "to make free, set at liberty"}, {"word": "laten gaan", "lang_code": "nl", "lang": "dutch", "code": "nl", "sense": "to make free, set at liberty"}], "wl_code": "EER"}
