@@ -3,6 +3,8 @@ DutchAnalyzers goal is to create a set of replacement rules and make easily avai
 
 DutchAnalyzer 2.0 is meant to be the public version of DutchAnalyzer using exclusively free to use, open source datasets. It is licensed under Creative Commons Attribution–NonCommercial–ShareAlike 4.0 International (CC BY-NC-SA 4.0). 
 
+Due to the use of templating strings DutchAnalyzer requires python 3.14 or higher. 
+
 ## Project Structure 
 ├── README.md
 ├── LICENSE.md

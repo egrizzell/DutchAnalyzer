@@ -10,4 +10,5 @@ src/dutch_analyzer.egg-info
 *.pyc
 settings.json
 quicktype_functions.py
+requirements313.txt
 
