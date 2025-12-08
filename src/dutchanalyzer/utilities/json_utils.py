@@ -16,6 +16,7 @@ import string
 from dutchanalyzer.config import PROJ_ROOT
 from dutchanalyzer.utilities.bool_filters import *
 from dutchanalyzer.utilities.utils import make_temp_file_path
+from dutchanalyzer.utilities.util_vars import LANG_CODES_TO_NAMES, LANG_NAMES_TO_CODES
 
 
 # Checking File Info
@@ -131,135 +132,16 @@ def lookup_lang_code(lang):
         return None
     lang = lang.lower()
     lang = lang.strip()
-    names_to_codes = {
-        # English
-    "english": "en",
-    "engels": "en",
-    "eng": "en",
-    "modern english": "en",
-    "modern_engels": "en",
-    "modern engels": "en",
-
-    # Simple English
-    "simple english": "simple",
-    "simple_english": "simple",
-    "simplified english": "simple",
-    "eenvoudig engels": "simple",
-
-    # Dutch
-    "dutch": "nl",
-    "nederlands": "nl",
-    "nld": "nl",
-
-    # Old English
-    "old english": "ang",
-    "old_english": "ang",
-    "anglo-saxon": "ang",
-    'angelsaksisch': "ang",
-    "oudengels": "ang",
-
-    # Middle English
-    "middle english": "enm",
-    "middle_english": "enm",
-    "middelengels": "enm",
-    "middenengels": "enm",
-
-    # Middle Dutch
-    "middle dutch": "dum",
-    "middle_dutch": "dum",
-    "middelnederlands": "dum",
-
-    # Old Dutch
-    "old dutch": "odt",
-    "old_dutch": "odt",
-    "oudnederlands": "odt",
     
-    # Low Saxon
-    "low saxon": "nds",
-    "low_saxon": "nds",
-    "low german": "nds",
-    "platduits": "nds",
-    "nedersaksisch": "nds",
-
-    # Dutch Low Saxon
-    "dutch low saxon": "nds-nl",
-    "dutch_low_saxon": "nds-nl",
-    "nedersaksisch (nederland)": "nds-nl",
-    'limburgs': 'lim',
-    'oudsaksisch':'osx'
-    }
-    return names_to_codes.get(lang)
+    return LANG_NAMES_TO_CODES.get(lang)
 
 def lookup_lang_from_code(lang_code):
     
-    codes_to_names = {
-    "en": {
-        "standard": "english",
-        "en_name": "english",
-        "nl_name": "engels"
-    },
-    "eng": {
-        "standard": "english",
-        "en_name": "english",
-        "nl_name": "engels"
-    },
-    "nl": {
-        "standard": "dutch",
-        "en_name": "dutch",
-        "nl_name": "nederlands"
-    },
-    "nld": {
-        "standard": "dutch",
-        "en_name": "dutch",
-        "nl_name": "nederlands"
-    },
-    "simple": {
-        "standard": "simple_english",
-        "en_name": "simple english",
-        "nl_name": "eenvoudig engels"
-    },
-    "ang": {
-        "standard": "old_english",
-        "en_name": "old english",
-        "nl_name": "oudengels"
-    },
-    "enm": {
-        "standard": "middle_english",
-        "en_name": "middle english",
-        "nl_name": "middelengels"
-    },
-    "dum": {
-        "standard": "middle_dutch",
-        "en_name": "middle dutch",
-        "nl_name": "middelnederlands"
-    },
-    "odt": {
-        "standard": "old_dutch",
-        "en_name": "old dutch",
-        "nl_name": "oudnederlands"
-    },
-    "nds": {
-        "standard": "low_saxon",
-        "en_name": "low german / low saxon",
-        "nl_name": "nedersaksisch"
-    },
-    "nds-nl": {
-        "standard": "dutch_low_saxon",
-        "en_name": "dutch low saxon",
-        "nl_name": "nedersaksisch (nederland)"
-    },
-    'lim': {
-        'standard': 'limburgish'
-    },
-    'osx': {
-        'standard': 'pre_dutch'
-        }
-    }
     if not lang_code:
         return None
     lang_code = lang_code.lower()
     lang_code = lang_code.strip()
-    name = codes_to_names.get(lang_code)
+    name = LANG_CODES_TO_NAMES.get(lang_code)
     if name:
         return name['standard']
     return None

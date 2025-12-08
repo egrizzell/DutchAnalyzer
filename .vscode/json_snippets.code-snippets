@@ -41,8 +41,23 @@
 				"$0"
 
 		]
-		}
+	},
 	
+	"get eid word pos senses forms": {
+		"prefix": ["eid wpsf"],
+		"body": ["eid = obj.get('entry_id')",
+				"word = obj.get('word')",
+				"pos = obj.get('pos')",
+				"senses = obj.get('senses')",
+				"forms = obj.get('forms')",
+				"if not forms:",
+				"\tforms = obj.get('form_of')",
+				"word_dict = {'entry_id':eid, 'word':word, 'pos':pos, 'senses':senses}",
+				"if forms:",
+				"\tword_dict['forms'] = forms",
+				"$0"
+		]
 
+	}
 	
 }
