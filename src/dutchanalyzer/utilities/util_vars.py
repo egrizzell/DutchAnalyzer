@@ -145,6 +145,12 @@ POS_INFO = {
         "nl_abbr": "bwb",
         "en_name": "adverbial phrase"
     },
+    "affix":{
+        "nl_name": "toevoegsel",
+        "nl_abbr": "add",
+        "en_name": "affix"
+    },
+
     "article": {
         "nl_name": "lidwoorden",
         "nl_abbr": "lidw",
